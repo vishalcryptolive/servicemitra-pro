@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { useRouter } from 'next/navigation';
 
+declare const window: any;
+
 export default function Home() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -20,6 +22,11 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+
     async function getUserAndData() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && user.email) {
@@ -66,25 +73,54 @@ export default function Home() {
     router.push('/login');
   };
 
-  // ऑटोमैटिक प्लान रिन्यू करने का फंक्शन (30 दिन बढ़ाने के लिए)
-  const handleRenewPlan = async () => {
-    const today = new Date();
-    const newExpiry = new Date(today);
-    newExpiry.setDate(today.getDate() + 30); // आज से 30 दिन आगे
-    const formattedExpiry = newExpiry.toISOString().split('T')[0];
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ subscription_expires_at: formattedExpiry })
-      .eq('email', userEmail);
-
-    if (error) {
-      alert('Renewal Error: ' + error.message);
-    } else {
-      alert('Plan successfully renewed for 30 days!');
-      setSubscriptionExpiry(formattedExpiry);
-      setIsExpired(false);
+  // Razorpay Payment Function (Monthly ₹499 or Yearly ₹1999)
+  const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
+    if (!window.Razorpay) {
+      alert('Razorpay SDK failed to load. Please check your internet connection.');
+      return;
     }
+
+    const amount = planType === 'yearly' ? 1999 : 499;
+    const daysToAdd = planType === 'yearly' ? 365 : 30;
+    const description = planType === 'yearly' ? 'Yearly Subscription (365 Days)' : 'Monthly Subscription (30 Days)';
+
+    const options = {
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TyTWGhk3pq3QSk',
+      amount: amount * 100, // Amount in paise
+      currency: 'INR',
+      name: providerName || 'ServiceMitra Pro',
+      description: description,
+      handler: async function (response: any) {
+        if (response.razorpay_payment_id) {
+          const today = new Date();
+          const newExpiry = new Date(today);
+          newExpiry.setDate(today.getDate() + daysToAdd);
+          const formattedExpiry = newExpiry.toISOString().split('T')[0];
+
+          const { error } = await supabase
+            .from('profiles')
+            .update({ subscription_expires_at: formattedExpiry })
+            .eq('email', userEmail);
+
+          if (error) {
+            alert('Renewal Error: ' + error.message);
+          } else {
+            alert(`Payment Successful! Plan successfully renewed for ${daysToAdd === 365 ? '1 Year' : '30 Days'}.`);
+            setSubscriptionExpiry(formattedExpiry);
+            setIsExpired(false);
+          }
+        }
+      },
+      prefill: {
+        email: userEmail,
+      },
+      theme: {
+        color: '#06b6d4',
+      },
+    };
+
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.open();
   };
 
   const handlePhoneChange = (inputPhone: string) => {
@@ -192,11 +228,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
       {isExpired && (
-        <div className="bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-lg animate-pulse flex justify-between items-center px-6">
+        <div className="bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-lg animate-pulse flex flex-col md:flex-row justify-between items-center px-6 gap-3">
           <span>⚠️ Your Subscription Plan has Expired ({subscriptionExpiry}). Please renew to unlock full features!</span>
-          <button onClick={handleRenewPlan} className="bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition">
-            Renew Now (₹299)
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => handleRenewPlan('monthly')} className="bg-white text-red-600 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition">
+              Monthly (₹499)
+            </button>
+            <button onClick={() => handleRenewPlan('yearly')} className="bg-slate-950 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-900 transition border border-white/20">
+              Yearly (₹1999)
+            </button>
+          </div>
         </div>
       )}
 
@@ -225,9 +266,14 @@ export default function Home() {
                 </p>
                 <p className="text-slate-400 text-[10px]">Expires: {subscriptionExpiry}</p>
               </div>
-              <button onClick={handleRenewPlan} className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2.5 py-1 rounded-lg text-[11px] font-bold hover:bg-cyan-500/20 transition">
-                Renew
-              </button>
+              <div className="flex gap-1">
+                <button onClick={() => handleRenewPlan('monthly')} className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-cyan-500/20 transition" title="Monthly ₹499">
+                  ₹499
+                </button>
+                <button onClick={() => handleRenewPlan('yearly')} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-emerald-500/20 transition" title="Yearly ₹1999">
+                  ₹1999
+                </button>
+              </div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm font-medium">
