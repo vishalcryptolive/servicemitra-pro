@@ -45,11 +45,19 @@ export default function Home() {
             setProviderName('My Service Shop');
           }
           
+          // Check if trial is exhausted (>= 2 entries) or subscription expired
+          const entriesUsed = profileData.free_entries_used || 0;
+          const isUserPro = profileData.is_pro || false;
+
+          if (!isUserPro && entriesUsed >= 2) {
+            setIsExpired(true);
+          }
+
           if (profileData.subscription_expires_at) {
             const expiryDate = profileData.subscription_expires_at;
             setSubscriptionExpiry(expiryDate);
             const today = new Date().toISOString().split('T')[0];
-            if (today > expiryDate && !profileData.is_pro) {
+            if (today > expiryDate && !isUserPro) {
               setIsExpired(true);
             }
           }
@@ -161,7 +169,7 @@ export default function Home() {
       return;
     }
 
-    // Check profile for Trial & Pro status
+    // Strict Trial & Pro Validation Check before saving booking
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_pro, free_entries_used')
@@ -176,7 +184,7 @@ export default function Home() {
         setLoading(false);
         return;
       } else {
-        // Increment free entries count
+        // Increment free entries count safely
         await supabase
           .from('profiles')
           .update({ free_entries_used: entriesUsed + 1 })
