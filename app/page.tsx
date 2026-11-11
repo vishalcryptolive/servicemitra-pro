@@ -44,20 +44,20 @@ export default function Home() {
             const expiryDate = profileData.subscription_expires_at;
             setSubscriptionExpiry(expiryDate);
             const today = new Date().toISOString().split('T')[0];
-            if (today > expiryDate) {
+            if (today > expiryDate && !profileData.is_pro) {
               setIsExpired(true);
             }
           }
         }
+        fetchBookings(user.email);
       } else {
         router.push('/login');
       }
     }
     getUserAndData();
-    fetchBookings();
   }, [router]);
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (emailToUse?: string) => {
     const { data } = await supabase
       .from('bookings')
       .select('*')
@@ -86,7 +86,7 @@ export default function Home() {
 
     const options = {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TyTWGhk3pq3QSk',
-      amount: amount * 100, // Amount in paise
+      amount: amount * 100,
       currency: 'INR',
       name: providerName || 'ServiceMitra Pro',
       description: description,
@@ -99,7 +99,10 @@ export default function Home() {
 
           const { error } = await supabase
             .from('profiles')
-            .update({ subscription_expires_at: formattedExpiry })
+            .update({ 
+              subscription_expires_at: formattedExpiry,
+              is_pro: true 
+            })
             .eq('email', userEmail);
 
           if (error) {
@@ -139,11 +142,37 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isExpired) {
-      alert('Aapka subscription plan expire ho chuka hai. Kripya pehle renew karein!');
+    setLoading(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) {
+      alert('User not logged in!');
+      setLoading(false);
       return;
     }
-    setLoading(true);
+
+    // Check profile for Trial & Pro status
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_pro, free_entries_used')
+      .eq('email', user.email)
+      .single();
+
+    if (profile && !profile.is_pro) {
+      const entriesUsed = profile.free_entries_used || 0;
+      if (entriesUsed >= 2) {
+        alert('Your 2 free trial entries have ended. Please upgrade to Pro to continue!');
+        setIsExpired(true);
+        setLoading(false);
+        return;
+      } else {
+        // Increment free entries count
+        await supabase
+          .from('profiles')
+          .update({ free_entries_used: entriesUsed + 1 })
+          .eq('email', user.email);
+      }
+    }
 
     const { error: bookingError } = await supabase
       .from('bookings')
@@ -153,15 +182,14 @@ export default function Home() {
         service, 
         price: Number(price) || 0,
         status: 'Pending',
-        next_service_date: nextServiceDate || null 
+        next_service_date: nextServiceDate || null,
+        user_id: user.id
       }]);
 
-    if (userEmail) {
-      await supabase
-        .from('profiles')
-        .update({ provider_name: providerName })
-        .eq('email', userEmail);
-    }
+    await supabase
+      .from('profiles')
+      .update({ provider_name: providerName })
+      .eq('email', user.email);
 
     if (bookingError) {
       alert('Samasya aayi hai: ' + bookingError.message);
@@ -171,7 +199,7 @@ export default function Home() {
       setPhone('');
       setPrice('');
       setNextServiceDate('');
-      fetchBookings();
+      fetchBookings(user.email);
     }
     setLoading(false);
   };
@@ -179,7 +207,7 @@ export default function Home() {
   const toggleStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
     await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    fetchBookings();
+    fetchBookings(userEmail);
   };
 
   const handlePrintInvoice = (item: any) => {
@@ -229,7 +257,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
       {isExpired && (
         <div className="bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-lg animate-pulse flex flex-col md:flex-row justify-between items-center px-6 gap-3">
-          <span>⚠️ Your Subscription Plan has Expired ({subscriptionExpiry}). Please renew to unlock full features!</span>
+          <span>⚠️ Your Free Trial / Subscription Plan has Ended. Please renew to unlock full features!</span>
           <div className="flex gap-2">
             <button onClick={() => handleRenewPlan('monthly')} className="bg-white text-red-600 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition">
               Monthly (₹499)
@@ -262,7 +290,7 @@ export default function Home() {
             <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm flex items-center gap-3">
               <div>
                 <p className={isExpired ? "text-red-400 font-bold" : "text-emerald-400 font-bold"}>
-                  {isExpired ? "❌ Plan Expired" : "💎 Active Plan: Pro"}
+                  {isExpired ? "❌ Trial/Plan Ended" : "💎 Active Plan: Pro"}
                 </p>
                 <p className="text-slate-400 text-[10px]">Expires: {subscriptionExpiry}</p>
               </div>
