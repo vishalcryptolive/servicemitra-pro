@@ -12,7 +12,7 @@ export default function Home() {
   const [service, setService] = useState('AC Repair & Service');
   const [price, setPrice] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
-  const [providerName, setProviderName] = useState('Cool Air Services');
+  const [providerName, setProviderName] = useState('My Service Shop');
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,14 +32,20 @@ export default function Home() {
       if (user && user.email) {
         setUserEmail(user.email);
         
+        // Fetch specific profile for the logged-in user only
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('email', user.email)
-          .single();
+          .maybeSingle();
 
         if (profileData) {
-          if (profileData.provider_name) setProviderName(profileData.provider_name);
+          if (profileData.provider_name) {
+            setProviderName(profileData.provider_name);
+          } else {
+            setProviderName('My Service Shop');
+          }
+          
           if (profileData.subscription_expires_at) {
             const expiryDate = profileData.subscription_expires_at;
             setSubscriptionExpiry(expiryDate);
@@ -48,8 +54,11 @@ export default function Home() {
               setIsExpired(true);
             }
           }
+        } else {
+          setProviderName('My Service Shop');
         }
-        fetchBookings(user.email);
+        
+        fetchBookings(user.id);
       } else {
         router.push('/login');
       }
@@ -57,12 +66,14 @@ export default function Home() {
     getUserAndData();
   }, [router]);
 
-  const fetchBookings = async (emailToUse?: string) => {
-    const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const fetchBookings = async (currentUserId?: string) => {
+    let query = supabase.from('bookings').select('*').order('created_at', { ascending: false });
+    
+    if (currentUserId) {
+      query = query.eq('user_id', currentUserId);
+    }
 
+    const { data } = await query;
     if (data) {
       setBookings(data);
     }
@@ -73,7 +84,7 @@ export default function Home() {
     router.push('/login');
   };
 
-  // Razorpay Payment Function (Monthly ₹499 or Yearly ₹1999)
+  // Razorpay Payment Function
   const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
     if (!window.Razorpay) {
       alert('Razorpay SDK failed to load. Please check your internet connection.');
@@ -156,7 +167,7 @@ export default function Home() {
       .from('profiles')
       .select('is_pro, free_entries_used')
       .eq('email', user.email)
-      .single();
+      .maybeSingle();
 
     if (profile && !profile.is_pro) {
       const entriesUsed = profile.free_entries_used || 0;
@@ -186,6 +197,7 @@ export default function Home() {
         user_id: user.id
       }]);
 
+    // Update shop name strictly for this user's email profile
     await supabase
       .from('profiles')
       .update({ provider_name: providerName })
@@ -199,7 +211,7 @@ export default function Home() {
       setPhone('');
       setPrice('');
       setNextServiceDate('');
-      fetchBookings(user.email);
+      fetchBookings(user.id);
     }
     setLoading(false);
   };
@@ -207,7 +219,8 @@ export default function Home() {
   const toggleStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
     await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    fetchBookings(userEmail);
+    const { data: { user } } = await supabase.auth.getUser();
+    fetchBookings(user?.id);
   };
 
   const handlePrintInvoice = (item: any) => {
