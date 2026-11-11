@@ -32,7 +32,6 @@ export default function Home() {
       if (user && user.email) {
         setUserEmail(user.email);
         
-        // Fetch specific profile for the logged-in user only
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -330,10 +329,10 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-1">
             <h2 className="text-lg font-semibold text-cyan-400 mb-4">New Booking</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Phone Number (Auto-Checks History)</label>
-                <input type="tel" required maxLength={10} value={phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="Enter 10-digit mobile" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
+                <input type="tel" required maxLength={10} value={phone} onChange={(e) => handlePhoneChange(e.target.value)} placeholder="Enter 10-digit mobile" autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
                 {customerPastVisits > 0 && (
                   <p className="text-emerald-400 text-[11px] mt-1 font-medium">✨ Returning Customer! Past Services: {customerPastVisits}</p>
                 )}
@@ -341,7 +340,7 @@ export default function Home() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Customer Name</label>
-                <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
+                <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
               </div>
 
               <div>
@@ -356,15 +355,15 @@ export default function Home() {
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Service Price (₹)</label>
-                <input type="number" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Enter amount in ₹" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
+                <input type="number" required value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Enter amount in ₹" autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Next Service Date</label>
-                <input type="date" value={nextServiceDate} onChange={(e) => setNextServiceDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
+                <input type="date" value={nextServiceDate} onChange={(e) => setNextServiceDate(e.target.value)} autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Shop Name (Auto-Syncs)</label>
-                <input type="text" value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Enter shop name" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
+                <input type="text" value={providerName} onChange={(e) => setProviderName(e.target.value)} placeholder="Enter shop name" autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500" />
               </div>
 
               <button type="submit" disabled={loading || isExpired} className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50">
@@ -374,7 +373,7 @@ export default function Home() {
           </div>
 
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-6">
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="🔍 Search by customer name, phone or service..." className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500" />
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="🔍 Search by customer name, phone or service..." autoComplete="off" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500" />
             
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
