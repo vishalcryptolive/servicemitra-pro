@@ -343,7 +343,7 @@ export default function Home() {
                 href="/signup"
                 className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400 transition"
               >
-                Get Started
+                Start Free Trial
               </a>
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function Home() {
 
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-4 pt-14 pb-12">
-          <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/30 p-8 md:p-12">
+          <div className="rounded-3xl border border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 p-8 shadow-2xl md:p-12">
             <p className="inline-block rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-xs font-semibold text-cyan-300">
               For AC Repair, Plumbing, Electrical, Carpentry & Home Services
             </p>
@@ -364,22 +364,22 @@ export default function Home() {
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <a
                 href="/signup"
-                className="rounded-xl bg-cyan-500 px-6 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400 transition"
+                className="rounded-xl bg-cyan-400 px-7 py-3.5 text-base font-extrabold text-slate-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-300 transition"
               >
-                Start Free Trial
+                Start Free Trial →
               </a>
               <button
                 type="button"
                 onClick={() => scrollToSection('pricing')}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800 transition"
+                className="rounded-xl border-2 border-cyan-500/50 bg-slate-900/90 px-6 py-3.5 text-base font-bold text-cyan-300 hover:bg-slate-800 hover:text-white transition"
               >
                 View Plans (₹499 / ₹1,999)
               </button>
               <a
                 href="/login"
-                className="rounded-xl px-4 py-3 text-sm font-semibold text-cyan-400 hover:underline"
+                className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 underline-offset-4 hover:text-white hover:underline"
               >
-                Already have an account? Sign In
+                Already have an account? Login
               </a>
             </div>
           </div>
