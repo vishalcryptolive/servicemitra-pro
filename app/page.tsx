@@ -19,6 +19,9 @@ export default function Home() {
   const [providerName, setProviderName] = useState('My Service Shop');
   const [userRole, setUserRole] = useState<UserRole>('owner');
   const [staffProfiles, setStaffProfiles] = useState<any[]>([]);
+  const [staffEmailInput, setStaffEmailInput] = useState('');
+  const [staffRoleInput, setStaffRoleInput] = useState<UserRole>('technician');
+  const [assigningStaff, setAssigningStaff] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
@@ -129,6 +132,33 @@ export default function Home() {
     getUserAndData();
   }, []);
 
+  const handleAssignStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageRoles) {
+      alert('Only Owner or Manager can assign staff.');
+      return;
+    }
+    const cleanEmail = staffEmailInput.trim();
+    if (!cleanEmail) return;
+
+    setAssigningStaff(true);
+    const { error } = await supabase.rpc('assign_staff_role', {
+      staff_email: cleanEmail,
+      assigned_role: staffRoleInput,
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      alert('Staff role assigned successfully!');
+      setStaffEmailInput('');
+      if (userId && userEmail) {
+        await fetchStaffProfiles(userId, userEmail);
+      }
+    }
+    setAssigningStaff(false);
+  };
+
   const handleRoleChange = async (profileItem: any, nextRole: UserRole) => {
     if (!canManageRoles) {
       alert('Only Owner or Manager can change roles.');
@@ -196,7 +226,6 @@ export default function Home() {
     router.push('/login');
   };
 
-  // Razorpay Payment Function with Server-Side Verification
   const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
     if (!window.Razorpay) {
       alert('Razorpay SDK failed to load. Please check your internet connection.');
@@ -419,11 +448,9 @@ export default function Home() {
     );
   }
 
-  // Public Landing Page when user is not logged in
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-        {/* Top Navbar */}
         <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
             <div className="flex items-center gap-3">
@@ -472,7 +499,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Hero */}
         <section className="mx-auto max-w-6xl px-4 pt-14 pb-12">
           <div className="rounded-3xl border border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 p-8 shadow-2xl md:p-12">
             <p className="inline-block rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-xs font-semibold text-cyan-300">
@@ -508,7 +534,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Features */}
         <section id="features" className="mx-auto max-w-6xl px-4 py-12">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">Key Features</h2>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -533,7 +558,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Pricing */}
         <section id="pricing" className="mx-auto max-w-6xl px-4 py-12">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">Subscription Plans</h2>
           <p className="mt-2 text-sm text-slate-400">
@@ -595,7 +619,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Policies */}
         <section id="policies" className="mx-auto max-w-6xl px-4 py-12">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 md:p-8">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
@@ -686,7 +709,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Contact */}
         <section id="contact" className="mx-auto max-w-6xl px-4 pt-2 pb-16">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 md:p-8">
             <h2 className="text-2xl font-bold text-white">Contact Us</h2>
@@ -708,7 +730,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Footer */}
         <footer className="mt-auto border-t border-slate-800 bg-slate-950 py-6 text-sm text-slate-400">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row">
             <p>© {new Date().getFullYear()} ServiceMitra Pro • {businessLocation}</p>
@@ -753,7 +774,6 @@ export default function Home() {
     );
   }
 
-  // Authenticated Dashboard & Bookings Workspace
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
       {isExpired && (
@@ -1078,13 +1098,41 @@ export default function Home() {
               <div>
                 <h2 className="text-lg font-bold text-white">Staff &amp; Roles Management</h2>
                 <p className="text-xs text-slate-400">
-                  Manage roles for your own account and staff under your workspace.
+                  Staff must sign up once first, then enter their email here to link to your shop and assign a role.
                 </p>
               </div>
               <span className="text-xs text-cyan-400 font-semibold">
                 Accounts: {staffProfiles.length}
               </span>
             </div>
+
+            <form onSubmit={handleAssignStaff} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="email"
+                required
+                value={staffEmailInput}
+                onChange={(e) => setStaffEmailInput(e.target.value)}
+                placeholder="Staff email (already signed up)"
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+              />
+              <select
+                value={staffRoleInput}
+                onChange={(e) => setStaffRoleInput(e.target.value as UserRole)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+              >
+                <option value="technician">technician</option>
+                <option value="receptionist">receptionist</option>
+                <option value="manager">manager</option>
+                <option value="owner">owner</option>
+              </select>
+              <button
+                type="submit"
+                disabled={assigningStaff}
+                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-4 py-2 text-xs transition disabled:opacity-50"
+              >
+                {assigningStaff ? 'Assigning...' : '+ Assign Staff Role'}
+              </button>
+            </form>
 
             <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
               {staffProfiles.length === 0 ? (
