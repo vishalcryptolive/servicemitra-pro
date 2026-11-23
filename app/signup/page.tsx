@@ -20,8 +20,8 @@ export default function SignupPage() {
       password,
     });
 
-    if (authError) {
-      alert('Signup Error: ' + authError.message);
+    if (authError || !authData.user) {
+      alert('Signup Error: ' + (authError?.message || 'Unable to create user'));
       setLoading(false);
       return;
     }
@@ -33,11 +33,14 @@ export default function SignupPage() {
     const { error: profileError } = await supabase
       .from('profiles')
       .insert([
-        { 
-          email, 
-          provider_name: providerName, 
-          subscription_expires_at: formattedExpiry 
-        }
+        {
+          user_id: authData.user.id,
+          email,
+          provider_name: providerName,
+          subscription_expires_at: formattedExpiry,
+          is_pro: false,
+          free_entries_used: 0,
+        },
       ]);
 
     if (profileError) {
@@ -54,49 +57,49 @@ export default function SignupPage() {
       <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-extrabold text-white">Join ServiceMitra Pro</h1>
-          <p className="text-slate-400 text-xs">Create your vendor account & get 30 days free trial</p>
+          <p className="text-slate-400 text-xs">Create your vendor account &amp; start your free trial</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Shop / Business Name</label>
-            <input 
-              type="text" 
-              required 
-              value={providerName} 
-              onChange={(e) => setProviderName(e.target.value)} 
-              placeholder="e.g. Sharma Electricals" 
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none" 
+            <input
+              type="text"
+              required
+              value={providerName}
+              onChange={(e) => setProviderName(e.target.value)}
+              placeholder="e.g. Sharma Electricals"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email Address</label>
-            <input 
-              type="email" 
-              required 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              placeholder="name@example.com" 
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none" 
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
-            <input 
-              type="password" 
-              required 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              placeholder="••••••••" 
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none" 
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 outline-none"
             />
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading} 
+          <button
+            type="submit"
+            disabled={loading}
             className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50"
           >
             {loading ? 'Creating Account...' : 'Register Business'}
