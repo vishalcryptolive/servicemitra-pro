@@ -24,6 +24,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [activePolicy, setActivePolicy] = useState<PolicyTab>('refund');
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && user.email) {
         setIsAuthenticated(true);
+        setUserId(user.id);
         setUserEmail(user.email);
 
         const { data: profileData } = await supabase
@@ -119,12 +121,13 @@ export default function Home() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setIsAuthenticated(false);
+    setUserId('');
     setUserEmail('');
     setUserRole('owner');
     router.push('/login');
   };
 
-  // Razorpay Payment Function
+  // Razorpay Payment Function with Server-Side Verification
   const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
     if (!window.Razorpay) {
       alert('Razorpay SDK failed to load. Please check your internet connection.');
@@ -141,27 +144,47 @@ export default function Home() {
       currency: 'INR',
       name: providerName || 'ServiceMitra Pro',
       description: description,
+      notes: {
+        planType,
+        userId,
+        userEmail,
+      },
       handler: async function (response: any) {
         if (response.razorpay_payment_id) {
-          const today = new Date();
-          const newExpiry = new Date(today);
-          newExpiry.setDate(today.getDate() + daysToAdd);
-          const formattedExpiry = newExpiry.toISOString().split('T')[0];
+          try {
+            const verifyRes = await fetch('/api/razorpay/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id || null,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                planType,
+                userId,
+                userEmail,
+              }),
+            });
 
-          const { error } = await supabase
-            .from('profiles')
-            .update({
-              subscription_expires_at: formattedExpiry,
-              is_pro: true,
-            })
-            .eq('email', userEmail);
+            const verifyData = await verifyRes.json();
 
-          if (error) {
-            alert('Renewal Error: ' + error.message);
-          } else {
-            alert(`Payment Successful! Plan successfully renewed for ${daysToAdd === 365 ? '1 Year' : '30 Days'}.`);
-            setSubscriptionExpiry(formattedExpiry);
+            if (!verifyRes.ok || !verifyData.success) {
+              alert('Payment verification failed: ' + (verifyData.error || 'Unknown error'));
+              return;
+            }
+
+            if (verifyData.subscription_expires_at) {
+              setSubscriptionExpiry(verifyData.subscription_expires_at);
+            }
             setIsExpired(false);
+            alert(
+              `Payment Verified! Plan successfully renewed for ${
+                daysToAdd === 365 ? '1 Year' : '30 Days'
+              }.`
+            );
+          } catch (err: any) {
+            alert('Verification request error: ' + (err?.message || 'Please contact support.'));
           }
         }
       },
