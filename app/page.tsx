@@ -48,10 +48,11 @@ export default function Home() {
     }
   };
 
-  const fetchStaffProfiles = async () => {
+  const fetchStaffProfiles = async (currentUserId: string, currentUserEmail: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, user_id, email, provider_name, role, is_pro, subscription_expires_at')
+      .select('id, user_id, owner_id, email, provider_name, role, is_pro, subscription_expires_at')
+      .or(`user_id.eq.${currentUserId},owner_id.eq.${currentUserId},email.eq.${currentUserEmail}`)
       .order('id', { ascending: true });
 
     if (!error && data) {
@@ -116,7 +117,7 @@ export default function Home() {
         }
 
         if (resolvedRole === 'owner' || resolvedRole === 'manager' || resolvedRole === 'super_admin') {
-          fetchStaffProfiles();
+          fetchStaffProfiles(user.id, user.email);
         }
 
         fetchBookings(user.id);
@@ -1077,7 +1078,7 @@ export default function Home() {
               <div>
                 <h2 className="text-lg font-bold text-white">Staff &amp; Roles Management</h2>
                 <p className="text-xs text-slate-400">
-                  Manage user roles across accounts (`owner`, `manager`, `receptionist`, `technician`).
+                  Manage roles for your own account and staff under your workspace.
                 </p>
               </div>
               <span className="text-xs text-cyan-400 font-semibold">
