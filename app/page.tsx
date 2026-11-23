@@ -8,6 +8,7 @@ declare const window: any;
 
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
+type StatusFilter = 'all' | 'Pending' | 'Completed';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -17,6 +18,9 @@ export default function Home() {
   const [nextServiceDate, setNextServiceDate] = useState('');
   const [providerName, setProviderName] = useState('My Service Shop');
   const [userRole, setUserRole] = useState<UserRole>('owner');
+  const [staffProfiles, setStaffProfiles] = useState<any[]>([]);
+  const [roleSavingId, setRoleSavingId] = useState<string | number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,6 +37,7 @@ export default function Home() {
   const businessLocation = 'New Delhi, India';
 
   const canViewRevenue = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
+  const canManageRoles = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
 
@@ -40,6 +45,17 @@ export default function Home() {
     const el = document.getElementById(id);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const fetchStaffProfiles = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, user_id, email, provider_name, role, is_pro, subscription_expires_at')
+      .order('id', { ascending: true });
+
+    if (!error && data) {
+      setStaffProfiles(data);
     }
   };
 
@@ -56,6 +72,8 @@ export default function Home() {
         setUserId(user.id);
         setUserEmail(user.email);
 
+        let resolvedRole: UserRole = 'owner';
+
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -71,6 +89,7 @@ export default function Home() {
 
           const validRoles: UserRole[] = ['owner', 'manager', 'receptionist', 'technician', 'super_admin'];
           if (profileData.role && validRoles.includes(profileData.role)) {
+            resolvedRole = profileData.role;
             setUserRole(profileData.role);
           } else {
             setUserRole('owner');
@@ -96,6 +115,10 @@ export default function Home() {
           setUserRole('owner');
         }
 
+        if (resolvedRole === 'owner' || resolvedRole === 'manager' || resolvedRole === 'super_admin') {
+          fetchStaffProfiles();
+        }
+
         fetchBookings(user.id);
       } else {
         setIsAuthenticated(false);
@@ -104,6 +127,50 @@ export default function Home() {
     }
     getUserAndData();
   }, []);
+
+  const handleRoleChange = async (profileItem: any, nextRole: UserRole) => {
+    if (!canManageRoles) {
+      alert('Only Owner or Manager can change roles.');
+      return;
+    }
+
+    const rowKey = profileItem.id ?? profileItem.user_id ?? profileItem.email;
+    setRoleSavingId(rowKey);
+
+    let updateQuery = supabase.from('profiles').update({ role: nextRole });
+    if (profileItem.id) {
+      updateQuery = updateQuery.eq('id', profileItem.id);
+    } else if (profileItem.user_id) {
+      updateQuery = updateQuery.eq('user_id', profileItem.user_id);
+    } else if (profileItem.email) {
+      updateQuery = updateQuery.eq('email', profileItem.email);
+    }
+
+    const { error } = await updateQuery;
+
+    if (error) {
+      alert('Role update error: ' + error.message);
+    } else {
+      setStaffProfiles((prev) =>
+        prev.map((p) => {
+          const sameRow =
+            (profileItem.id && p.id === profileItem.id) ||
+            (profileItem.user_id && p.user_id === profileItem.user_id) ||
+            (profileItem.email && p.email === profileItem.email);
+          return sameRow ? { ...p, role: nextRole } : p;
+        })
+      );
+
+      if (
+        (userId && profileItem.user_id === userId) ||
+        (userEmail && profileItem.email && profileItem.email.toLowerCase() === userEmail.toLowerCase())
+      ) {
+        setUserRole(nextRole);
+      }
+    }
+
+    setRoleSavingId(null);
+  };
 
   const fetchBookings = async (currentUserId?: string) => {
     let query = supabase.from('bookings').select('*').order('created_at', { ascending: false });
@@ -124,6 +191,7 @@ export default function Home() {
     setUserId('');
     setUserEmail('');
     setUserRole('owner');
+    setStaffProfiles([]);
     router.push('/login');
   };
 
@@ -325,16 +393,22 @@ export default function Home() {
     }
   };
 
+  const pendingCount = bookings.filter((item) => (item.status || 'Pending') === 'Pending').length;
+  const completedCount = bookings.filter((item) => item.status === 'Completed').length;
+
   const totalRevenue = bookings
     .filter((item) => item.status === 'Completed')
     .reduce((sum, item) => sum + (Number(item.price) || 0), 0);
 
-  const filteredBookings = bookings.filter(
-    (item) =>
+  const filteredBookings = bookings.filter((item) => {
+    const currentStatus = item.status || 'Pending';
+    const matchesStatus = statusFilter === 'all' || currentStatus === statusFilter;
+    const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.phone.includes(searchQuery) ||
-      item.service.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      item.service.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
   if (authChecking) {
     return (
@@ -753,8 +827,14 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-sm font-medium">
-              Bookings: <span className="text-cyan-400 font-bold">{bookings.length}</span>
+            <div className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium flex items-center gap-3">
+              <span>
+                Pending: <strong className="text-amber-400">{pendingCount}</strong>
+              </span>
+              <span className="text-slate-700">|</span>
+              <span>
+                Total: <strong className="text-cyan-400">{bookings.length}</strong>
+              </span>
             </div>
 
             <button
@@ -878,7 +958,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-6">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-5">
             <input
               type="text"
               value={searchQuery}
@@ -887,6 +967,42 @@ export default function Home() {
               autoComplete="off"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
             />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'all'
+                    ? 'bg-cyan-500 text-slate-950'
+                    : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                All ({bookings.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('Pending')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'Pending'
+                    ? 'bg-amber-400 text-slate-950'
+                    : 'bg-slate-950 text-amber-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Pending ({pendingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('Completed')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'Completed'
+                    ? 'bg-emerald-400 text-slate-950'
+                    : 'bg-slate-950 text-emerald-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Completed ({completedCount})
+              </button>
+            </div>
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
@@ -954,6 +1070,64 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {canManageRoles && (
+          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white">Staff &amp; Roles Management</h2>
+                <p className="text-xs text-slate-400">
+                  Manage user roles across accounts (`owner`, `manager`, `receptionist`, `technician`).
+                </p>
+              </div>
+              <span className="text-xs text-cyan-400 font-semibold">
+                Accounts: {staffProfiles.length}
+              </span>
+            </div>
+
+            <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+              {staffProfiles.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No profiles found.</p>
+              ) : (
+                staffProfiles.map((prof, idx) => {
+                  const rowKey = prof.id ?? prof.user_id ?? prof.email ?? idx;
+                  const currentRole: UserRole = prof.role || 'owner';
+                  return (
+                    <div
+                      key={rowKey}
+                      className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-white">
+                          {prof.provider_name || 'Service Shop'}
+                        </p>
+                        <p className="text-xs text-slate-400">{prof.email || 'No email'}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold uppercase text-cyan-300">
+                          {currentRole}
+                        </span>
+                        <select
+                          value={currentRole}
+                          disabled={roleSavingId === rowKey}
+                          onChange={(e) => handleRoleChange(prof, e.target.value as UserRole)}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none"
+                        >
+                          <option value="owner">owner</option>
+                          <option value="manager">manager</option>
+                          <option value="receptionist">receptionist</option>
+                          <option value="technician">technician</option>
+                          <option value="super_admin">super_admin</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
