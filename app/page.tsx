@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 declare const window: any;
 
 type PolicyTab = 'refund' | 'privacy' | 'terms';
+type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -15,6 +16,7 @@ export default function Home() {
   const [price, setPrice] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
   const [providerName, setProviderName] = useState('My Service Shop');
+  const [userRole, setUserRole] = useState<UserRole>('owner');
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +30,10 @@ export default function Home() {
 
   const supportEmail = 'thevishalrai.official@gmail.com';
   const businessLocation = 'New Delhi, India';
+
+  const canViewRevenue = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
+  const canCreateBooking = userRole !== 'technician';
+  const canBillingAndShare = userRole !== 'technician';
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -51,7 +57,7 @@ export default function Home() {
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
-          .eq('email', user.email)
+          .or(`user_id.eq.${user.id},email.eq.${user.email}`)
           .maybeSingle();
 
         if (profileData) {
@@ -59,6 +65,13 @@ export default function Home() {
             setProviderName(profileData.provider_name);
           } else {
             setProviderName('My Service Shop');
+          }
+
+          const validRoles: UserRole[] = ['owner', 'manager', 'receptionist', 'technician', 'super_admin'];
+          if (profileData.role && validRoles.includes(profileData.role)) {
+            setUserRole(profileData.role);
+          } else {
+            setUserRole('owner');
           }
 
           const entriesUsed = profileData.free_entries_used || 0;
@@ -78,6 +91,7 @@ export default function Home() {
           }
         } else {
           setProviderName('My Service Shop');
+          setUserRole('owner');
         }
 
         fetchBookings(user.id);
@@ -106,6 +120,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setIsAuthenticated(false);
     setUserEmail('');
+    setUserRole('owner');
     router.push('/login');
   };
 
@@ -177,6 +192,10 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreateBooking) {
+      alert('Technician role cannot create new bookings.');
+      return;
+    }
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -219,10 +238,12 @@ export default function Home() {
       },
     ]);
 
-    await supabase
-      .from('profiles')
-      .update({ provider_name: providerName })
-      .eq('email', user.email);
+    if (userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin') {
+      await supabase
+        .from('profiles')
+        .update({ provider_name: providerName })
+        .eq('email', user.email);
+    }
 
     if (bookingError) {
       alert('Samasya aayi hai: ' + bookingError.message);
@@ -245,6 +266,10 @@ export default function Home() {
   };
 
   const handlePrintInvoice = (item: any) => {
+    if (!canBillingAndShare) {
+      alert('Billing access is restricted for Technician role.');
+      return;
+    }
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
@@ -660,7 +685,12 @@ export default function Home() {
               {providerName ? providerName.charAt(0).toUpperCase() : 'V'}
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-white">{providerName}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-extrabold text-white">{providerName}</h1>
+                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold uppercase text-cyan-300">
+                  {userRole}
+                </span>
+              </div>
               <p className="text-slate-400 text-xs md:text-sm">
                 Logged in: <span className="text-cyan-400">{userEmail}</span>
               </p>
@@ -668,10 +698,12 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
-              <p className="text-emerald-400 font-bold">💰 Total Revenue</p>
-              <p className="text-white font-extrabold text-base">₹{totalRevenue}</p>
-            </div>
+            {canViewRevenue && (
+              <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
+                <p className="text-emerald-400 font-bold">💰 Total Revenue</p>
+                <p className="text-white font-extrabold text-base">₹{totalRevenue}</p>
+              </div>
+            )}
 
             <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm flex items-center gap-3">
               <div>
@@ -714,107 +746,113 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-1">
             <h2 className="text-lg font-semibold text-cyan-400 mb-4">New Booking</h2>
-            <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Phone Number (Auto-Checks History)
-                </label>
-                <input
-                  type="tel"
-                  required
-                  maxLength={10}
-                  value={phone}
-                  onChange={(e) => handlePhoneChange(e.target.value)}
-                  placeholder="Enter 10-digit mobile"
-                  autoComplete="off"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                />
-                {customerPastVisits > 0 && (
-                  <p className="text-emerald-400 text-[11px] mt-1 font-medium">
-                    ✨ Returning Customer! Past Services: {customerPastVisits}
-                  </p>
-                )}
-              </div>
+            {!canCreateBooking ? (
+              <p className="text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-4">
+                Technician role has view &amp; status update access only.
+              </p>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Phone Number (Auto-Checks History)
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    value={phone}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
+                    placeholder="Enter 10-digit mobile"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                  {customerPastVisits > 0 && (
+                    <p className="text-emerald-400 text-[11px] mt-1 font-medium">
+                      ✨ Returning Customer! Past Services: {customerPastVisits}
+                    </p>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Customer Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter full name"
-                  autoComplete="off"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter full name"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Service Type
-                </label>
-                <select
-                  value={service}
-                  onChange={(e) => setService(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Service Type
+                  </label>
+                  <select
+                    value={service}
+                    onChange={(e) => setService(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  >
+                    <option value="AC Repair & Service">AC Repair &amp; Service</option>
+                    <option value="Plumbing">Plumbing</option>
+                    <option value="Electrical Work">Electrical Work</option>
+                    <option value="Carpentry">Carpentry</option>
+                    <option value="Home Cleaning">Home Cleaning</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Service Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="Enter amount in ₹"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Next Service Date
+                  </label>
+                  <input
+                    type="date"
+                    value={nextServiceDate}
+                    onChange={(e) => setNextServiceDate(e.target.value)}
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Shop Name (Auto-Syncs)
+                  </label>
+                  <input
+                    type="text"
+                    value={providerName}
+                    onChange={(e) => setProviderName(e.target.value)}
+                    placeholder="Enter shop name"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || isExpired}
+                  className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50"
                 >
-                  <option value="AC Repair & Service">AC Repair & Service</option>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Electrical Work">Electrical Work</option>
-                  <option value="Carpentry">Carpentry</option>
-                  <option value="Home Cleaning">Home Cleaning</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Service Price (₹)
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Enter amount in ₹"
-                  autoComplete="off"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Next Service Date
-                </label>
-                <input
-                  type="date"
-                  value={nextServiceDate}
-                  onChange={(e) => setNextServiceDate(e.target.value)}
-                  autoComplete="off"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Shop Name (Auto-Syncs)
-                </label>
-                <input
-                  type="text"
-                  value={providerName}
-                  onChange={(e) => setProviderName(e.target.value)}
-                  placeholder="Enter shop name"
-                  autoComplete="off"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || isExpired}
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Confirm & Save Booking'}
-              </button>
-            </form>
+                  {loading ? 'Saving...' : 'Confirm & Save Booking'}
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-6">
@@ -839,8 +877,9 @@ export default function Home() {
                     <div>
                       <h3 className="font-bold text-white text-base">{item.name}</h3>
                       <p className="text-slate-400 text-xs">
-                        📞 {item.phone} | 💵 ₹{item.price || 0}{' '}
-                        {item.next_service_date && `| 📅 Next: ${item.next_service_date}`}
+                        📞 {item.phone}
+                        {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
+                        {item.next_service_date && ` | 📅 Next: ${item.next_service_date}`}
                       </p>
                     </div>
 
@@ -860,27 +899,31 @@ export default function Home() {
                         {item.status || 'Pending'}
                       </button>
 
-                      <button
-                        onClick={() => handlePrintInvoice(item)}
-                        className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full text-xs font-bold"
-                      >
-                        📄 Bill
-                      </button>
+                      {canBillingAndShare && (
+                        <>
+                          <button
+                            onClick={() => handlePrintInvoice(item)}
+                            className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full text-xs font-bold"
+                          >
+                            📄 Bill
+                          </button>
 
-                      <a
-                        href={`https://wa.me/91${item.phone}?text=Hello%20${encodeURIComponent(
-                          item.name
-                        )},%20thank%20you%20for%20choosing%20${encodeURIComponent(
-                          providerName
-                        )}!%20Your%20bill%20for%20${encodeURIComponent(item.service)}%20is%20₹${
-                          item.price || 0
-                        }.%20Please%20rate%20our%20service%20out%20of%205%20stars!⭐️`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
-                      >
-                        💬 WhatsApp & Review
-                      </a>
+                          <a
+                            href={`https://wa.me/91${item.phone}?text=Hello%20${encodeURIComponent(
+                              item.name
+                            )},%20thank%20you%20for%20choosing%20${encodeURIComponent(
+                              providerName
+                            )}!%20Your%20bill%20for%20${encodeURIComponent(item.service)}%20is%20₹${
+                              item.price || 0
+                            }.%20Please%20rate%20our%20service%20out%20of%205%20stars!⭐️`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
+                          >
+                            💬 WhatsApp &amp; Review
+                          </a>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))
