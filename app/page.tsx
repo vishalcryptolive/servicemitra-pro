@@ -8,6 +8,7 @@ declare const window: any;
 
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
+type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
 type StatusFilter = 'all' | 'Pending' | 'Completed';
 
 export default function Home() {
@@ -21,7 +22,7 @@ export default function Home() {
   const [workspaceOwnerId, setWorkspaceOwnerId] = useState('');
   const [staffProfiles, setStaffProfiles] = useState<any[]>([]);
   const [staffEmailInput, setStaffEmailInput] = useState('');
-  const [staffRoleInput, setStaffRoleInput] = useState<UserRole>('technician');
+  const [staffRoleInput, setStaffRoleInput] = useState<StaffAssignableRole>('technician');
   const [assigningStaff, setAssigningStaff] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -41,7 +42,7 @@ export default function Home() {
   const businessLocation = 'New Delhi, India';
 
   const canViewRevenue = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
-  const canManageRoles = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
+  const canManageRoles = userRole === 'owner' || userRole === 'super_admin';
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
 
@@ -157,7 +158,7 @@ export default function Home() {
           setUserRole('owner');
         }
 
-        if (resolvedRole === 'owner' || resolvedRole === 'manager' || resolvedRole === 'super_admin') {
+        if (resolvedRole === 'owner' || resolvedRole === 'super_admin') {
           fetchStaffProfiles(targetOwnerId, user.id, user.email);
         }
 
@@ -173,7 +174,7 @@ export default function Home() {
   const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageRoles) {
-      alert('Only Owner or Manager can assign staff.');
+      alert('Only Owner can assign staff.');
       return;
     }
     const cleanEmail = staffEmailInput.trim();
@@ -197,9 +198,9 @@ export default function Home() {
     setAssigningStaff(false);
   };
 
-  const handleRoleChange = async (profileItem: any, nextRole: UserRole) => {
+  const handleRoleChange = async (profileItem: any, nextRole: StaffAssignableRole) => {
     if (!canManageRoles) {
-      alert('Only Owner or Manager can change roles.');
+      alert('Only Owner can change roles.');
       return;
     }
 
@@ -1157,13 +1158,12 @@ export default function Home() {
               />
               <select
                 value={staffRoleInput}
-                onChange={(e) => setStaffRoleInput(e.target.value as UserRole)}
+                onChange={(e) => setStaffRoleInput(e.target.value as StaffAssignableRole)}
                 className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
               >
                 <option value="technician">technician</option>
                 <option value="receptionist">receptionist</option>
                 <option value="manager">manager</option>
-                <option value="owner">owner</option>
               </select>
               <button
                 type="submit"
@@ -1198,16 +1198,14 @@ export default function Home() {
                           {currentRole}
                         </span>
                         <select
-                          value={currentRole}
-                          disabled={roleSavingId === rowKey}
-                          onChange={(e) => handleRoleChange(prof, e.target.value as UserRole)}
-                          className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none"
+                          value={currentRole === 'owner' || currentRole === 'super_admin' ? 'manager' : currentRole}
+                          disabled={roleSavingId === rowKey || currentRole === 'owner' || currentRole === 'super_admin'}
+                          onChange={(e) => handleRoleChange(prof, e.target.value as StaffAssignableRole)}
+                          className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none disabled:opacity-60"
                         >
-                          <option value="owner">owner</option>
                           <option value="manager">manager</option>
                           <option value="receptionist">receptionist</option>
                           <option value="technician">technician</option>
-                          <option value="super_admin">super_admin</option>
                         </select>
                       </div>
                     </div>
