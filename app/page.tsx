@@ -18,6 +18,7 @@ export default function Home() {
   const [nextServiceDate, setNextServiceDate] = useState('');
   const [providerName, setProviderName] = useState('My Service Shop');
   const [userRole, setUserRole] = useState<UserRole>('owner');
+  const [workspaceOwnerId, setWorkspaceOwnerId] = useState('');
   const [staffProfiles, setStaffProfiles] = useState<any[]>([]);
   const [staffEmailInput, setStaffEmailInput] = useState('');
   const [staffRoleInput, setStaffRoleInput] = useState<UserRole>('technician');
@@ -51,11 +52,11 @@ export default function Home() {
     }
   };
 
-  const fetchStaffProfiles = async (currentUserId: string, currentUserEmail: string) => {
+  const fetchStaffProfiles = async (ownerRootId: string, currentUserId: string, currentUserEmail: string) => {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, user_id, owner_id, email, provider_name, role, is_pro, subscription_expires_at')
-      .or(`user_id.eq.${currentUserId},owner_id.eq.${currentUserId},email.eq.${currentUserEmail}`)
+      .or(`user_id.eq.${ownerRootId},owner_id.eq.${ownerRootId},user_id.eq.${currentUserId},email.eq.${currentUserEmail}`)
       .order('id', { ascending: true });
 
     if (!error && data) {
@@ -77,6 +78,7 @@ export default function Home() {
         setUserEmail(user.email);
 
         let resolvedRole: UserRole = 'owner';
+        let targetOwnerId = user.id;
 
         const { data: profileData } = await supabase
           .from('profiles')
@@ -85,11 +87,10 @@ export default function Home() {
           .maybeSingle();
 
         if (profileData) {
-          if (profileData.provider_name) {
-            setProviderName(profileData.provider_name);
-          } else {
-            setProviderName('My Service Shop');
+          if (profileData.owner_id) {
+            targetOwnerId = profileData.owner_id;
           }
+          setWorkspaceOwnerId(targetOwnerId);
 
           const validRoles: UserRole[] = ['owner', 'manager', 'receptionist', 'technician', 'super_admin'];
           if (profileData.role && validRoles.includes(profileData.role)) {
@@ -99,31 +100,68 @@ export default function Home() {
             setUserRole('owner');
           }
 
-          const entriesUsed = profileData.free_entries_used || 0;
-          const isUserPro = profileData.is_pro || false;
+          if (profileData.owner_id && profileData.owner_id !== user.id) {
+            const { data: ownerProfile } = await supabase
+              .from('profiles')
+              .select('provider_name, is_pro, free_entries_used, subscription_expires_at')
+              .eq('user_id', profileData.owner_id)
+              .maybeSingle();
 
-          if (!isUserPro && entriesUsed >= 2) {
-            setIsExpired(true);
-          }
+            if (ownerProfile?.provider_name) {
+              setProviderName(ownerProfile.provider_name);
+            } else if (profileData.provider_name) {
+              setProviderName(profileData.provider_name);
+            } else {
+              setProviderName('My Service Shop');
+            }
 
-          if (profileData.subscription_expires_at) {
-            const expiryDate = profileData.subscription_expires_at;
-            setSubscriptionExpiry(expiryDate);
-            const today = new Date().toISOString().split('T')[0];
-            if (today > expiryDate && !isUserPro) {
+            const entriesUsed = ownerProfile?.free_entries_used || 0;
+            const isUserPro = ownerProfile?.is_pro || false;
+            if (!isUserPro && entriesUsed >= 2) {
               setIsExpired(true);
+            }
+            if (ownerProfile?.subscription_expires_at) {
+              const expiryDate = ownerProfile.subscription_expires_at;
+              setSubscriptionExpiry(expiryDate);
+              const today = new Date().toISOString().split('T')[0];
+              if (today > expiryDate && !isUserPro) {
+                setIsExpired(true);
+              }
+            }
+          } else {
+            if (profileData.provider_name) {
+              setProviderName(profileData.provider_name);
+            } else {
+              setProviderName('My Service Shop');
+            }
+
+            const entriesUsed = profileData.free_entries_used || 0;
+            const isUserPro = profileData.is_pro || false;
+
+            if (!isUserPro && entriesUsed >= 2) {
+              setIsExpired(true);
+            }
+
+            if (profileData.subscription_expires_at) {
+              const expiryDate = profileData.subscription_expires_at;
+              setSubscriptionExpiry(expiryDate);
+              const today = new Date().toISOString().split('T')[0];
+              if (today > expiryDate && !isUserPro) {
+                setIsExpired(true);
+              }
             }
           }
         } else {
+          setWorkspaceOwnerId(user.id);
           setProviderName('My Service Shop');
           setUserRole('owner');
         }
 
         if (resolvedRole === 'owner' || resolvedRole === 'manager' || resolvedRole === 'super_admin') {
-          fetchStaffProfiles(user.id, user.email);
+          fetchStaffProfiles(targetOwnerId, user.id, user.email);
         }
 
-        fetchBookings(user.id);
+        fetchBookings(targetOwnerId);
       } else {
         setIsAuthenticated(false);
       }
@@ -153,7 +191,7 @@ export default function Home() {
       alert('Staff role assigned successfully!');
       setStaffEmailInput('');
       if (userId && userEmail) {
-        await fetchStaffProfiles(userId, userEmail);
+        await fetchStaffProfiles(workspaceOwnerId || userId, userId, userEmail);
       }
     }
     setAssigningStaff(false);
@@ -203,11 +241,11 @@ export default function Home() {
     setRoleSavingId(null);
   };
 
-  const fetchBookings = async (currentUserId?: string) => {
+  const fetchBookings = async (targetUserId?: string) => {
     let query = supabase.from('bookings').select('*').order('created_at', { ascending: false });
 
-    if (currentUserId) {
-      query = query.eq('user_id', currentUserId);
+    if (targetUserId) {
+      query = query.eq('user_id', targetUserId);
     }
 
     const { data } = await query;
@@ -221,6 +259,7 @@ export default function Home() {
     setIsAuthenticated(false);
     setUserId('');
     setUserEmail('');
+    setWorkspaceOwnerId('');
     setUserRole('owner');
     setStaffProfiles([]);
     router.push('/login');
@@ -244,7 +283,7 @@ export default function Home() {
       description: description,
       notes: {
         planType,
-        userId,
+        userId: workspaceOwnerId || userId,
         userEmail,
       },
       handler: async function (response: any) {
@@ -260,7 +299,7 @@ export default function Home() {
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
                 planType,
-                userId,
+                userId: workspaceOwnerId || userId,
                 userEmail,
               }),
             });
@@ -326,10 +365,12 @@ export default function Home() {
       return;
     }
 
+    const effectiveOwnerId = workspaceOwnerId || user.id;
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_pro, free_entries_used')
-      .eq('email', user.email)
+      .eq('user_id', effectiveOwnerId)
       .maybeSingle();
 
     if (profile && !profile.is_pro) {
@@ -343,7 +384,7 @@ export default function Home() {
         await supabase
           .from('profiles')
           .update({ free_entries_used: entriesUsed + 1 })
-          .eq('email', user.email);
+          .eq('user_id', effectiveOwnerId);
       }
     }
 
@@ -355,7 +396,7 @@ export default function Home() {
         price: Number(price) || 0,
         status: 'Pending',
         next_service_date: nextServiceDate || null,
-        user_id: user.id,
+        user_id: effectiveOwnerId,
       },
     ]);
 
@@ -363,7 +404,7 @@ export default function Home() {
       await supabase
         .from('profiles')
         .update({ provider_name: providerName })
-        .eq('email', user.email);
+        .eq('user_id', effectiveOwnerId);
     }
 
     if (bookingError) {
@@ -374,7 +415,7 @@ export default function Home() {
       setPhone('');
       setPrice('');
       setNextServiceDate('');
-      fetchBookings(user.id);
+      fetchBookings(effectiveOwnerId);
     }
     setLoading(false);
   };
@@ -382,8 +423,7 @@ export default function Home() {
   const toggleStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
     await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    const { data: { user } } = await supabase.auth.getUser();
-    fetchBookings(user?.id);
+    fetchBookings(workspaceOwnerId || userId);
   };
 
   const handlePrintInvoice = (item: any) => {
