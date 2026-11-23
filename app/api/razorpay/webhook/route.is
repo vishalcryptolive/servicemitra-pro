@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+
+export async function POST(req: NextRequest) {
+  try {
+    const rawBody = await req.text();
+    const signature = req.headers.get('x-razorpay-signature');
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!webhookSecret) {
+      return NextResponse.json(
+        { error: 'Webhook secret not configured on server' },
+        { status: 500 }
+      );
+    }
+
+    if (!signature || !supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { error: 'Missing signature or server configuration' },
+        { status: 400 }
+      );
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    if (expectedSignature !== signature) {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
+    }
+
+    const event = JSON.parse(rawBody);
+    const eventName: string = event?.event || '';
+    const paymentEntity = event?.payload?.payment?.entity;
+
+    if (!paymentEntity?.id) {
+      return NextResponse.json({ received: true });
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const paymentId: string = paymentEntity.id;
+    const notes = paymentEntity.notes || {};
+    const planType = notes.planType === 'yearly' ? 'yearly' : 'monthly';
+    const amountInr =
+      Math.round((Number(paymentEntity.amount) || 0) / 100) ||
+      (planType === 'yearly' ? 1999 : 499);
+    const periodDays = planType === 'yearly' ? 365 : 30;
+    const userEmail: string | null = paymentEntity.email || notes.userEmail || null;
+    const userId: string | null = notes.userId || null;
+
+    if (eventName === 'payment.captured' || eventName === 'order.paid') {
+      const { data: existingPaid } = await supabaseAdmin
+        .from('payments')
+        .select('id, status')
+        .eq('razorpay_payment_id', paymentId)
+        .maybeSingle();
+
+      if (existingPaid?.status === 'paid') {
+        return NextResponse.json({ received: true, duplicate: true });
+      }
+
+      let profileRow: any = null;
+      if (userId || userEmail) {
+        const filterParts = [
+          userId ? `user_id.eq.${userId}` : '',
+          userEmail ? `email.eq.${userEmail}` : '',
+        ].filter(Boolean);
+
+        const { data } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .or(filterParts.join(','))
+          .maybeSingle();
+        profileRow = data;
+      }
+
+      const today = new Date();
+      const baseDate =
+        profileRow?.subscription_expires_at &&
+        new Date(profileRow.subscription_expires_at) > today
+          ? new Date(profileRow.subscription_expires_at)
+          : today;
+
+      baseDate.setDate(baseDate.getDate() + periodDays);
+      const formattedExpiry = baseDate.toISOString().split('T')[0];
+
+      await supabaseAdmin.from('payments').upsert(
+        [
+          {
+            user_id: profileRow?.user_id || userId,
+            user_email: profileRow?.email || userEmail,
+            plan_type: planType,
+            amount_inr: amountInr,
+            currency: paymentEntity.currency || 'INR',
+            razorpay_order_id: paymentEntity.order_id || null,
+            razorpay_payment_id: paymentId,
+            status: 'paid',
+            period_days: periodDays,
+          },
+        ],
+        { onConflict: 'razorpay_payment_id' }
+      );
+
+      if (profileRow?.id) {
+        await supabaseAdmin
+          .from('profiles')
+          .update({
+            is_pro: true,
+            subscription_expires_at: formattedExpiry,
+          })
+          .eq('id', profileRow.id);
+      }
+    } else if (eventName === 'payment.failed') {
+      await supabaseAdmin.from('payments').upsert(
+        [
+          {
+            user_id: userId,
+            user_email: userEmail,
+            plan_type: planType,
+            amount_inr: amountInr,
+            currency: paymentEntity.currency || 'INR',
+            razorpay_order_id: paymentEntity.order_id || null,
+            razorpay_payment_id: paymentId,
+            status: 'failed',
+            period_days: periodDays,
+          },
+        ],
+        { onConflict: 'razorpay_payment_id' }
+      );
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || 'Webhook processing error' },
+      { status: 500 }
+    );
+  }
+}
