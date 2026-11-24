@@ -10,12 +10,15 @@ type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
 type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueToday' | 'DueSoon' | 'Overdue';
+type PaymentMethod = 'Cash' | 'UPI' | 'Due';
 
 export default function Home() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [service, setService] = useState('AC Repair & Service');
   const [price, setPrice] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Due');
+  const [paymentNote, setPaymentNote] = useState('');
   const [partsUsed, setPartsUsed] = useState('');
   const [amcExpiryDate, setAmcExpiryDate] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
@@ -40,6 +43,8 @@ export default function Home() {
   const [editPhone, setEditPhone] = useState('');
   const [editService, setEditService] = useState('AC Repair & Service');
   const [editPrice, setEditPrice] = useState('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('Due');
+  const [editPaymentNote, setEditPaymentNote] = useState('');
   const [editPartsUsed, setEditPartsUsed] = useState('');
   const [editAmcExpiryDate, setEditAmcExpiryDate] = useState('');
   const [editStatus, setEditStatus] = useState('Pending');
@@ -64,6 +69,11 @@ export default function Home() {
   const canBillingAndShare = userRole !== 'technician';
   const canEditOrDeleteBooking = userRole !== 'technician';
   const canExportCsv = userRole !== 'technician';
+
+  const normalizePaymentMethod = (val?: string | null): PaymentMethod => {
+    if (val === 'Cash' || val === 'UPI' || val === 'Due') return val;
+    return 'Due';
+  };
 
   const getDueBadge = (dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -387,12 +397,18 @@ export default function Home() {
       return;
     }
 
+    const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    if (!razorpayKey) {
+      alert('Payment gateway key is not configured.');
+      return;
+    }
+
     const amount = planType === 'yearly' ? 1999 : 499;
     const daysToAdd = planType === 'yearly' ? 365 : 30;
     const description = planType === 'yearly' ? 'Yearly Subscription (365 Days)' : 'Monthly Subscription (30 Days)';
 
     const options = {
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TyTWGhk3pq3QSk',
+      key: razorpayKey,
       amount: amount * 100,
       currency: 'INR',
       name: providerName || 'ServiceMitra Pro',
@@ -510,6 +526,8 @@ export default function Home() {
         phone,
         service,
         price: Number(price) || 0,
+        payment_method: paymentMethod,
+        payment_note: paymentNote.trim() || null,
         parts_used: partsUsed.trim() || null,
         amc_expiry_date: amcExpiryDate || null,
         status: 'Pending',
@@ -532,6 +550,8 @@ export default function Home() {
       setName('');
       setPhone('');
       setPrice('');
+      setPaymentMethod('Due');
+      setPaymentNote('');
       setPartsUsed('');
       setAmcExpiryDate('');
       setNextServiceDate('');
@@ -550,6 +570,8 @@ export default function Home() {
     setEditPhone(item.phone || '');
     setEditService(item.service || 'AC Repair & Service');
     setEditPrice(String(item.price ?? ''));
+    setEditPaymentMethod(normalizePaymentMethod(item.payment_method));
+    setEditPaymentNote(item.payment_note || '');
     setEditPartsUsed(item.parts_used || '');
     setEditAmcExpiryDate(item.amc_expiry_date || '');
     setEditStatus(item.status || 'Pending');
@@ -562,6 +584,8 @@ export default function Home() {
     setEditPhone('');
     setEditService('AC Repair & Service');
     setEditPrice('');
+    setEditPaymentMethod('Due');
+    setEditPaymentNote('');
     setEditPartsUsed('');
     setEditAmcExpiryDate('');
     setEditStatus('Pending');
@@ -576,13 +600,16 @@ export default function Home() {
     }
     setSavingEdit(true);
 
-    const { error } = await supabase
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    let updateQuery = supabase
       .from('bookings')
       .update({
         name: editName.trim(),
         phone: editPhone.trim(),
         service: editService,
         price: Number(editPrice) || 0,
+        payment_method: editPaymentMethod,
+        payment_note: editPaymentNote.trim() || null,
         parts_used: editPartsUsed.trim() || null,
         amc_expiry_date: editAmcExpiryDate || null,
         status: editStatus,
@@ -590,11 +617,17 @@ export default function Home() {
       })
       .eq('id', id);
 
+    if (effectiveOwnerId) {
+      updateQuery = updateQuery.eq('user_id', effectiveOwnerId);
+    }
+
+    const { error } = await updateQuery;
+
     if (error) {
       alert('Update error: ' + error.message);
     } else {
       cancelEditingBooking();
-      await fetchBookings(workspaceOwnerId || userId);
+      await fetchBookings(effectiveOwnerId);
     }
     setSavingEdit(false);
   };
@@ -608,7 +641,14 @@ export default function Home() {
     if (!confirmed) return;
 
     setDeletingBookingId(id);
-    const { error } = await supabase.from('bookings').delete().eq('id', id);
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    let deleteQuery = supabase.from('bookings').delete().eq('id', id);
+
+    if (effectiveOwnerId) {
+      deleteQuery = deleteQuery.eq('user_id', effectiveOwnerId);
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       alert('Delete error: ' + error.message);
@@ -616,7 +656,7 @@ export default function Home() {
       if (editingBookingId === id) {
         cancelEditingBooking();
       }
-      await fetchBookings(workspaceOwnerId || userId);
+      await fetchBookings(effectiveOwnerId);
     }
     setDeletingBookingId(null);
   };
@@ -644,8 +684,8 @@ export default function Home() {
     }
 
     const headers = canViewRevenue
-      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Price (INR)', 'Status', 'Next Service Date']
-      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Status', 'Next Service Date'];
+      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Payment Mode', 'Payment Note', 'Price (INR)', 'Status', 'Next Service Date']
+      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Payment Mode', 'Payment Note', 'Status', 'Next Service Date'];
 
     const rows = filteredBookings.map((item) => {
       const baseCols = [
@@ -655,6 +695,8 @@ export default function Home() {
         escapeCsvValue(item.service ?? ''),
         escapeCsvValue(item.parts_used || ''),
         escapeCsvValue(item.amc_expiry_date || ''),
+        escapeCsvValue(normalizePaymentMethod(item.payment_method)),
+        escapeCsvValue(item.payment_note || ''),
       ];
       if (canViewRevenue) {
         baseCols.push(escapeCsvValue(Number(item.price) || 0));
@@ -681,17 +723,28 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const buildCallUrl = (rawPhone?: string | null) => {
+    const cleanPhone = String(rawPhone || '').replace(/\D/g, '');
+    if (!cleanPhone) return '';
+    return `tel:${cleanPhone}`;
+  };
+
   const buildWhatsAppUrl = (item: any) => {
     const cleanPhone = String(item.phone || '').replace(/\D/g, '');
     const waNumber = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
     const dueBadge = getDueBadge(item.next_service_date);
     const amountVal = Number(item.price) || 0;
+    const payMode = normalizePaymentMethod(item.payment_method);
 
     const lines = [
       `Hello ${item.name}, thank you for choosing ${providerName}!`,
       `Service: ${item.service}`,
-      `Bill Amount: ₹${amountVal} (${item.status || 'Pending'})`,
+      `Bill Amount: ₹${amountVal} (${item.status || 'Pending'} • ${payMode})`,
     ];
+
+    if (item.payment_note) {
+      lines.push(`Payment Note: ${item.payment_note}`);
+    }
 
     if (item.parts_used) {
       lines.push(`Parts/Items Used: ${item.parts_used}`);
@@ -732,6 +785,7 @@ export default function Home() {
       });
       const amountVal = Number(item.price) || 0;
       const statusText = item.status || 'Pending';
+      const payMode = normalizePaymentMethod(item.payment_method);
       const visitCount = item.phone
         ? bookings.filter((b) => String(b.phone || '').trim() === String(item.phone).trim()).length
         : 1;
@@ -797,11 +851,16 @@ export default function Home() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}</td>
+                    <td>
+                      ${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}
+                      <div style="font-size: 12px; color: #475569; margin-top: 4px;">
+                        Payment Mode: ${payMode}${item.payment_note ? ` • Note: ${item.payment_note}` : ''}
+                      </div>
+                    </td>
                     <td style="text-align: right;">₹${amountVal}</td>
                   </tr>
                   <tr class="total-row">
-                    <td>Total Payable</td>
+                    <td>Total Payable (${payMode})</td>
                     <td style="text-align: right;">₹${amountVal}</td>
                   </tr>
                 </tbody>
@@ -856,7 +915,9 @@ export default function Home() {
       item.name.toLowerCase().includes(q) ||
       item.phone.includes(searchQuery) ||
       item.service.toLowerCase().includes(q) ||
-      String(item.parts_used || '').toLowerCase().includes(q);
+      String(item.parts_used || '').toLowerCase().includes(q) ||
+      String(item.payment_note || '').toLowerCase().includes(q) ||
+      String(item.payment_method || '').toLowerCase().includes(q);
     return matchesStatus && matchesSearch;
   });
 
@@ -1381,6 +1442,35 @@ export default function Home() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Payment Mode
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(normalizePaymentMethod(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  >
+                    <option value="Due">Due (Baaki / Pending)</option>
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Payment / Pending Note (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                    placeholder="e.g. ₹200 due tomorrow, Paid via GPay"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                     Parts / Items Used (Optional)
                   </label>
                   <input
@@ -1450,7 +1540,7 @@ export default function Home() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="🔍 Search by customer name, phone, service or parts..."
+                placeholder="🔍 Search by customer name, phone, service, parts or payment..."
                 autoComplete="off"
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
               />
@@ -1542,6 +1632,8 @@ export default function Home() {
                 filteredBookings.map((item, index) => {
                   const dueBadge = getDueBadge(item.next_service_date);
                   const isEditing = editingBookingId === item.id;
+                  const payMode = normalizePaymentMethod(item.payment_method);
+                  const callHref = buildCallUrl(item.phone);
 
                   if (isEditing) {
                     return (
@@ -1599,6 +1691,22 @@ export default function Home() {
                             value={editPrice}
                             onChange={(e) => setEditPrice(e.target.value)}
                             placeholder="Amount (₹)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <select
+                            value={editPaymentMethod}
+                            onChange={(e) => setEditPaymentMethod(normalizePaymentMethod(e.target.value))}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          >
+                            <option value="Due">Due (Baaki / Pending)</option>
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={editPaymentNote}
+                            onChange={(e) => setEditPaymentNote(e.target.value)}
+                            placeholder="Payment / Pending Note"
                             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
                           />
                           <input
@@ -1673,6 +1781,17 @@ export default function Home() {
                               AMC: {item.amc_expiry_date}
                             </span>
                           )}
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              payMode === 'Cash'
+                                ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                                : payMode === 'UPI'
+                                ? 'bg-sky-500/15 text-sky-200 border border-sky-500/30'
+                                : 'bg-amber-500/15 text-amber-200 border border-amber-500/30'
+                            }`}
+                          >
+                            {payMode}
+                          </span>
                         </div>
                         <p className="text-slate-400 text-xs mt-0.5">
                           📞 {item.phone}
@@ -1684,12 +1803,26 @@ export default function Home() {
                             🛠️ Parts: {item.parts_used}
                           </p>
                         )}
+                        {item.payment_note && (
+                          <p className="text-amber-300/90 text-xs mt-0.5">
+                            📝 Note: {item.payment_note}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full text-xs font-semibold">
                           {item.service}
                         </span>
+
+                        {callHref && (
+                          <a
+                            href={callHref}
+                            className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 px-3 py-1 rounded-full text-xs font-bold transition"
+                          >
+                            📞 Call
+                          </a>
+                        )}
 
                         <button
                           onClick={() => toggleStatus(item.id, item.status)}
