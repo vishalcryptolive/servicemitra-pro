@@ -18,6 +18,9 @@ export default function Home() {
   const [price, setPrice] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
   const [providerName, setProviderName] = useState('My Service Shop');
+  const [shopPhone, setShopPhone] = useState('');
+  const [shopAddress, setShopAddress] = useState('');
+  const [savingShopSettings, setSavingShopSettings] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('owner');
   const [workspaceOwnerId, setWorkspaceOwnerId] = useState('');
   const [staffProfiles, setStaffProfiles] = useState<any[]>([]);
@@ -52,6 +55,7 @@ export default function Home() {
 
   const canViewRevenue = userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin';
   const canManageRoles = userRole === 'owner' || userRole === 'super_admin';
+  const canManageShopSettings = userRole === 'owner' || userRole === 'super_admin';
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
   const canEditOrDeleteBooking = userRole !== 'technician';
@@ -106,7 +110,7 @@ export default function Home() {
   const fetchStaffProfiles = async (ownerRootId: string, currentUserId: string, currentUserEmail: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, user_id, owner_id, email, provider_name, role, is_pro, subscription_expires_at')
+      .select('id, user_id, owner_id, email, provider_name, shop_phone, shop_address, role, is_pro, subscription_expires_at')
       .or(`user_id.eq.${ownerRootId},owner_id.eq.${ownerRootId},user_id.eq.${currentUserId},email.eq.${currentUserEmail}`)
       .order('id', { ascending: true });
 
@@ -154,7 +158,7 @@ export default function Home() {
           if (profileData.owner_id && profileData.owner_id !== user.id) {
             const { data: ownerProfile } = await supabase
               .from('profiles')
-              .select('provider_name, is_pro, free_entries_used, subscription_expires_at')
+              .select('provider_name, shop_phone, shop_address, is_pro, free_entries_used, subscription_expires_at')
               .eq('user_id', profileData.owner_id)
               .maybeSingle();
 
@@ -165,6 +169,9 @@ export default function Home() {
             } else {
               setProviderName('My Service Shop');
             }
+
+            setShopPhone(ownerProfile?.shop_phone || profileData.shop_phone || '');
+            setShopAddress(ownerProfile?.shop_address || profileData.shop_address || '');
 
             const entriesUsed = ownerProfile?.free_entries_used || 0;
             const isUserPro = ownerProfile?.is_pro || false;
@@ -185,6 +192,8 @@ export default function Home() {
             } else {
               setProviderName('My Service Shop');
             }
+            setShopPhone(profileData.shop_phone || '');
+            setShopAddress(profileData.shop_address || '');
 
             const entriesUsed = profileData.free_entries_used || 0;
             const isUserPro = profileData.is_pro || false;
@@ -205,6 +214,8 @@ export default function Home() {
         } else {
           setWorkspaceOwnerId(user.id);
           setProviderName('My Service Shop');
+          setShopPhone('');
+          setShopAddress('');
           setUserRole('owner');
         }
 
@@ -220,6 +231,47 @@ export default function Home() {
     }
     getUserAndData();
   }, []);
+
+  const handleSaveShopSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageShopSettings) {
+      alert('Only Owner can update shop settings.');
+      return;
+    }
+
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    if (!effectiveOwnerId) {
+      alert('User session not found.');
+      return;
+    }
+
+    setSavingShopSettings(true);
+    const cleanedShopName = providerName.trim() || 'My Service Shop';
+    const cleanedPhone = shopPhone.trim();
+    const cleanedAddress = shopAddress.trim();
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        provider_name: cleanedShopName,
+        shop_phone: cleanedPhone || null,
+        shop_address: cleanedAddress || null,
+      })
+      .eq('user_id', effectiveOwnerId);
+
+    if (error) {
+      alert('Shop settings save error: ' + error.message);
+    } else {
+      setProviderName(cleanedShopName);
+      setShopPhone(cleanedPhone);
+      setShopAddress(cleanedAddress);
+      alert('Shop details updated successfully!');
+      if (userId && userEmail) {
+        await fetchStaffProfiles(effectiveOwnerId, userId, userEmail);
+      }
+    }
+    setSavingShopSettings(false);
+  };
 
   const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -592,7 +644,9 @@ export default function Home() {
               <div class="top-bar">
                 <div>
                   <h2 class="shop-title">${providerName}</h2>
-                  <div style="font-size: 13px; color: #475569; margin-top: 4px;">Service Invoice &amp; Receipt</div>
+                  ${shopPhone ? `<div style="font-size: 13px; color: #334155; margin-top: 4px;">Phone: ${shopPhone}</div>` : ''}
+                  ${shopAddress ? `<div style="font-size: 13px; color: #475569; margin-top: 2px;">Address: ${shopAddress}</div>` : ''}
+                  <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Service Invoice &amp; Receipt</div>
                 </div>
                 <div class="meta">
                   <div><strong>Invoice No:</strong> #${item.id ?? 'N/A'}</div>
@@ -1037,6 +1091,8 @@ export default function Home() {
               </div>
               <p className="text-slate-400 text-xs md:text-sm">
                 Logged in: <span className="text-cyan-400">{userEmail}</span>
+                {shopPhone ? ` • 📞 ${shopPhone}` : ''}
+                {shopAddress ? ` • 📍 ${shopAddress}` : ''}
               </p>
             </div>
           </div>
@@ -1462,6 +1518,71 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {canManageShopSettings && (
+          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white">Shop Settings</h2>
+                <p className="text-xs text-slate-400">
+                  Update your shop name, phone number, and address shown on dashboard header and printed invoices.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveShopSettings} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  Shop Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={providerName}
+                  onChange={(e) => setProviderName(e.target.value)}
+                  placeholder="Enter shop name"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  Shop Phone
+                </label>
+                <input
+                  type="tel"
+                  value={shopPhone}
+                  onChange={(e) => setShopPhone(e.target.value)}
+                  placeholder="Enter shop phone number"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  Shop Address
+                </label>
+                <input
+                  type="text"
+                  value={shopAddress}
+                  onChange={(e) => setShopAddress(e.target.value)}
+                  placeholder="Enter shop address"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-3 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={savingShopSettings}
+                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-5 py-2 text-xs transition disabled:opacity-50"
+                >
+                  {savingShopSettings ? 'Saving...' : 'Save Shop Settings'}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
 
         {canManageRoles && (
           <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
