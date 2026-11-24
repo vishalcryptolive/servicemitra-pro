@@ -9,14 +9,19 @@ declare const window: any;
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
-type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueToday' | 'DueSoon' | 'Overdue';
+type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueToday' | 'DueSoon' | 'Overdue' | 'AmcExpiring';
 type PaymentMethod = 'Cash' | 'UPI' | 'Due';
 
 export default function Home() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [applianceInfo, setApplianceInfo] = useState('');
   const [service, setService] = useState('AC Repair & Service');
+  const [complaintIssue, setComplaintIssue] = useState('');
+  const [assignedTechnician, setAssignedTechnician] = useState('');
   const [price, setPrice] = useState('');
+  const [partsCost, setPartsCost] = useState('');
+  const [labourCost, setLabourCost] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Due');
   const [paymentNote, setPaymentNote] = useState('');
   const [partsUsed, setPartsUsed] = useState('');
@@ -34,6 +39,8 @@ export default function Home() {
   const [assigningStaff, setAssigningStaff] = useState(false);
   const [roleSavingId, setRoleSavingId] = useState<string | number | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [technicianFilter, setTechnicianFilter] = useState<string>('all');
+  const [selectedHistoryPhone, setSelectedHistoryPhone] = useState<string | null>(null);
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,8 +48,13 @@ export default function Home() {
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editApplianceInfo, setEditApplianceInfo] = useState('');
   const [editService, setEditService] = useState('AC Repair & Service');
+  const [editComplaintIssue, setEditComplaintIssue] = useState('');
+  const [editAssignedTechnician, setEditAssignedTechnician] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editPartsCost, setEditPartsCost] = useState('');
+  const [editLabourCost, setEditLabourCost] = useState('');
   const [editPaymentMethod, setEditPaymentMethod] = useState<PaymentMethod>('Due');
   const [editPaymentNote, setEditPaymentNote] = useState('');
   const [editPartsUsed, setEditPartsUsed] = useState('');
@@ -75,7 +87,7 @@ export default function Home() {
     return 'Due';
   };
 
-  const getDueBadge = (dateStr?: string | null) => {
+  const getDiffDaysFromToday = (dateStr?: string | null): number | null => {
     if (!dateStr) return null;
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -84,8 +96,14 @@ export default function Home() {
     if (parts.length !== 3) return null;
     const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     targetDate.setHours(0, 0, 0, 0);
+    if (Number.isNaN(targetDate.getTime())) return null;
 
-    const diffDays = Math.round((targetDate.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.round((targetDate.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const getDueBadge = (dateStr?: string | null) => {
+    const diffDays = getDiffDaysFromToday(dateStr);
+    if (diffDays === null || !dateStr) return null;
 
     if (diffDays < 0) {
       return {
@@ -121,6 +139,12 @@ export default function Home() {
       isDueSoon: false,
       isOverdue: false,
     };
+  };
+
+  const isAmcExpiringSoon = (amcDateStr?: string | null): boolean => {
+    const diffDays = getDiffDaysFromToday(amcDateStr);
+    if (diffDays === null) return false;
+    return diffDays >= 0 && diffDays <= 15;
   };
 
   const scrollToSection = (id: string) => {
@@ -475,6 +499,9 @@ export default function Home() {
       const existingCustomer = bookings.find((item) => item.phone === inputPhone);
       if (existingCustomer) {
         setName(existingCustomer.name);
+        if (!applianceInfo && existingCustomer.appliance_info) {
+          setApplianceInfo(existingCustomer.appliance_info);
+        }
       }
     }
   };
@@ -520,12 +547,22 @@ export default function Home() {
       }
     }
 
+    const pCost = Number(partsCost) || 0;
+    const lCost = Number(labourCost) || 0;
+    const enteredPrice = Number(price) || 0;
+    const finalPrice = enteredPrice > 0 ? enteredPrice : pCost + lCost;
+
     const { error: bookingError } = await supabase.from('bookings').insert([
       {
         name,
         phone,
+        appliance_info: applianceInfo.trim() || null,
         service,
-        price: Number(price) || 0,
+        complaint_issue: complaintIssue.trim() || null,
+        assigned_technician: assignedTechnician.trim() || null,
+        price: finalPrice,
+        parts_cost: pCost,
+        labour_cost: lCost,
         payment_method: paymentMethod,
         payment_note: paymentNote.trim() || null,
         parts_used: partsUsed.trim() || null,
@@ -536,20 +573,18 @@ export default function Home() {
       },
     ]);
 
-    if (userRole === 'owner' || userRole === 'manager' || userRole === 'super_admin') {
-      await supabase
-        .from('profiles')
-        .update({ provider_name: providerName })
-        .eq('user_id', effectiveOwnerId);
-    }
-
     if (bookingError) {
       alert('Samasya aayi hai: ' + bookingError.message);
     } else {
-      alert('Booking aur Shop Name safaltapoorvak save ho gaye hain!');
+      alert('Booking safaltapoorvak save ho gayi hai!');
       setName('');
       setPhone('');
+      setApplianceInfo('');
+      setComplaintIssue('');
+      setAssignedTechnician('');
       setPrice('');
+      setPartsCost('');
+      setLabourCost('');
       setPaymentMethod('Due');
       setPaymentNote('');
       setPartsUsed('');
@@ -568,8 +603,13 @@ export default function Home() {
     setEditingBookingId(item.id);
     setEditName(item.name || '');
     setEditPhone(item.phone || '');
+    setEditApplianceInfo(item.appliance_info || '');
     setEditService(item.service || 'AC Repair & Service');
+    setEditComplaintIssue(item.complaint_issue || '');
+    setEditAssignedTechnician(item.assigned_technician || '');
     setEditPrice(String(item.price ?? ''));
+    setEditPartsCost(String(item.parts_cost ?? ''));
+    setEditLabourCost(String(item.labour_cost ?? ''));
     setEditPaymentMethod(normalizePaymentMethod(item.payment_method));
     setEditPaymentNote(item.payment_note || '');
     setEditPartsUsed(item.parts_used || '');
@@ -582,8 +622,13 @@ export default function Home() {
     setEditingBookingId(null);
     setEditName('');
     setEditPhone('');
+    setEditApplianceInfo('');
     setEditService('AC Repair & Service');
+    setEditComplaintIssue('');
+    setEditAssignedTechnician('');
     setEditPrice('');
+    setEditPartsCost('');
+    setEditLabourCost('');
     setEditPaymentMethod('Due');
     setEditPaymentNote('');
     setEditPartsUsed('');
@@ -600,14 +645,24 @@ export default function Home() {
     }
     setSavingEdit(true);
 
+    const pCost = Number(editPartsCost) || 0;
+    const lCost = Number(editLabourCost) || 0;
+    const enteredPrice = Number(editPrice) || 0;
+    const finalPrice = enteredPrice > 0 ? enteredPrice : pCost + lCost;
+
     const effectiveOwnerId = workspaceOwnerId || userId;
     let updateQuery = supabase
       .from('bookings')
       .update({
         name: editName.trim(),
         phone: editPhone.trim(),
+        appliance_info: editApplianceInfo.trim() || null,
         service: editService,
-        price: Number(editPrice) || 0,
+        complaint_issue: editComplaintIssue.trim() || null,
+        assigned_technician: editAssignedTechnician.trim() || null,
+        price: finalPrice,
+        parts_cost: pCost,
+        labour_cost: lCost,
         payment_method: editPaymentMethod,
         payment_note: editPaymentNote.trim() || null,
         parts_used: editPartsUsed.trim() || null,
@@ -663,8 +718,13 @@ export default function Home() {
 
   const toggleStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
-    await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    fetchBookings(workspaceOwnerId || userId);
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    let query = supabase.from('bookings').update({ status: newStatus }).eq('id', id);
+    if (effectiveOwnerId) {
+      query = query.eq('user_id', effectiveOwnerId);
+    }
+    await query;
+    fetchBookings(effectiveOwnerId);
   };
 
   const escapeCsvValue = (val: any) => {
@@ -684,20 +744,62 @@ export default function Home() {
     }
 
     const headers = canViewRevenue
-      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Payment Mode', 'Payment Note', 'Price (INR)', 'Status', 'Next Service Date']
-      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Payment Mode', 'Payment Note', 'Status', 'Next Service Date'];
+      ? [
+          'Booking ID',
+          'Customer Name',
+          'Phone',
+          'Appliance / Machine',
+          'Service',
+          'Complaint / Job Note',
+          'Technician',
+          'Parts Used',
+          'Parts Cost (INR)',
+          'Labour Cost (INR)',
+          'AMC Expiry Date',
+          'Payment Mode',
+          'Payment Note',
+          'Total Price (INR)',
+          'Status',
+          'Next Service Date',
+        ]
+      : [
+          'Booking ID',
+          'Customer Name',
+          'Phone',
+          'Appliance / Machine',
+          'Service',
+          'Complaint / Job Note',
+          'Technician',
+          'Parts Used',
+          'AMC Expiry Date',
+          'Payment Mode',
+          'Payment Note',
+          'Status',
+          'Next Service Date',
+        ];
 
     const rows = filteredBookings.map((item) => {
       const baseCols = [
         escapeCsvValue(item.id ?? ''),
         escapeCsvValue(item.name ?? ''),
         escapeCsvValue(item.phone ?? ''),
+        escapeCsvValue(item.appliance_info || ''),
         escapeCsvValue(item.service ?? ''),
+        escapeCsvValue(item.complaint_issue || ''),
+        escapeCsvValue(item.assigned_technician || ''),
         escapeCsvValue(item.parts_used || ''),
+      ];
+      if (canViewRevenue) {
+        baseCols.push(
+          escapeCsvValue(Number(item.parts_cost) || 0),
+          escapeCsvValue(Number(item.labour_cost) || 0)
+        );
+      }
+      baseCols.push(
         escapeCsvValue(item.amc_expiry_date || ''),
         escapeCsvValue(normalizePaymentMethod(item.payment_method)),
-        escapeCsvValue(item.payment_note || ''),
-      ];
+        escapeCsvValue(item.payment_note || '')
+      );
       if (canViewRevenue) {
         baseCols.push(escapeCsvValue(Number(item.price) || 0));
       }
@@ -738,9 +840,13 @@ export default function Home() {
 
     const lines = [
       `Hello ${item.name}, thank you for choosing ${providerName}!`,
-      `Service: ${item.service}`,
+      `Service: ${item.service}${item.appliance_info ? ` (${item.appliance_info})` : ''}`,
       `Bill Amount: ₹${amountVal} (${item.status || 'Pending'} • ${payMode})`,
     ];
+
+    if (item.assigned_technician) {
+      lines.push(`Technician: ${item.assigned_technician}`);
+    }
 
     if (item.payment_note) {
       lines.push(`Payment Note: ${item.payment_note}`);
@@ -784,6 +890,8 @@ export default function Home() {
         year: 'numeric',
       });
       const amountVal = Number(item.price) || 0;
+      const pCostVal = Number(item.parts_cost) || 0;
+      const lCostVal = Number(item.labour_cost) || 0;
       const statusText = item.status || 'Pending';
       const payMode = normalizePaymentMethod(item.payment_method);
       const visitCount = item.phone
@@ -793,10 +901,10 @@ export default function Home() {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Invoice #${item.id ?? ''} - ${item.name}</title>
+            <title>Job Card & Invoice #${item.id ?? ''} - ${item.name}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 28px; color: #0f172a; background: #f8fafc; }
-              .invoice-box { max-width: 640px; margin: auto; padding: 32px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; }
+              .invoice-box { max-width: 660px; margin: auto; padding: 32px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; }
               .top-bar { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; }
               .shop-title { margin: 0; font-size: 24px; color: #0f172a; }
               .meta { text-align: right; font-size: 13px; color: #475569; line-height: 1.5; }
@@ -817,25 +925,28 @@ export default function Home() {
                   <h2 class="shop-title">${providerName}</h2>
                   ${shopPhone ? `<div style="font-size: 13px; color: #334155; margin-top: 4px;">Phone: ${shopPhone}</div>` : ''}
                   ${shopAddress ? `<div style="font-size: 13px; color: #475569; margin-top: 2px;">Address: ${shopAddress}</div>` : ''}
-                  <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Service Invoice &amp; Receipt</div>
+                  <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Job Card, Service Invoice &amp; Receipt</div>
                 </div>
                 <div class="meta">
-                  <div><strong>Invoice No:</strong> #${item.id ?? 'N/A'}</div>
+                  <div><strong>Job / Invoice No:</strong> #${item.id ?? 'N/A'}</div>
                   <div><strong>Date:</strong> ${invoiceDate}</div>
                   <div><strong>Status:</strong> ${statusText}</div>
+                  ${item.assigned_technician ? `<div><strong>Technician:</strong> ${item.assigned_technician}</div>` : ''}
                 </div>
               </div>
 
               <div class="grid-2">
                 <div class="box-card">
-                  <div class="box-label">Customer Details</div>
+                  <div class="box-label">Customer &amp; Machine</div>
                   <div><strong>Name:</strong> ${item.name}</div>
                   <div style="margin-top: 4px;"><strong>Phone:</strong> ${item.phone}</div>
+                  <div style="margin-top: 4px;"><strong>Machine:</strong> ${item.appliance_info || 'Not Specified'}</div>
                   <div style="margin-top: 4px;"><strong>Total Visits:</strong> ${visitCount}</div>
                 </div>
                 <div class="box-card">
-                  <div class="box-label">Service &amp; AMC Details</div>
+                  <div class="box-label">Job, AMC &amp; Schedule</div>
                   <div><strong>Service:</strong> ${item.service}</div>
+                  <div style="margin-top: 4px;"><strong>Complaint:</strong> ${item.complaint_issue || 'General Service'}</div>
                   <div style="margin-top: 4px;"><strong>Parts Used:</strong> ${item.parts_used || 'None / Standard'}</div>
                   <div style="margin-top: 4px;"><strong>AMC Expiry:</strong> ${item.amc_expiry_date || 'N/A'}</div>
                   <div style="margin-top: 4px;"><strong>Next Service:</strong> ${item.next_service_date || 'Not Scheduled'}</div>
@@ -850,14 +961,29 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
+                  ${
+                    pCostVal > 0 || lCostVal > 0
+                      ? `
+                        <tr>
+                          <td>Parts / Material (${item.parts_used || 'Spares'})</td>
+                          <td style="text-align: right;">₹${pCostVal}</td>
+                        </tr>
+                        <tr>
+                          <td>Service / Labour Charge (${item.service})</td>
+                          <td style="text-align: right;">₹${lCostVal}</td>
+                        </tr>
+                      `
+                      : `
+                        <tr>
+                          <td>${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}</td>
+                          <td style="text-align: right;">₹${amountVal}</td>
+                        </tr>
+                      `
+                  }
                   <tr>
-                    <td>
-                      ${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}
-                      <div style="font-size: 12px; color: #475569; margin-top: 4px;">
-                        Payment Mode: ${payMode}${item.payment_note ? ` • Note: ${item.payment_note}` : ''}
-                      </div>
+                    <td colspan="2" style="font-size: 12px; color: #475569;">
+                      Payment Mode: <strong>${payMode}</strong>${item.payment_note ? ` • Note: ${item.payment_note}` : ''}
                     </td>
-                    <td style="text-align: right;">₹${amountVal}</td>
                   </tr>
                   <tr class="total-row">
                     <td>Total Payable (${payMode})</td>
@@ -867,7 +993,7 @@ export default function Home() {
               </table>
 
               <div class="footer">
-                Thank you for choosing ${providerName}. Keep this invoice for your service records.
+                Thank you for choosing ${providerName}. Keep this job card &amp; invoice for your service records.
               </div>
             </div>
             <script>window.onload = function() { window.print(); }</script>
@@ -884,11 +1010,20 @@ export default function Home() {
       .filter(Boolean)
   ).size;
 
+  const technicianOptions = Array.from(
+    new Set(
+      bookings
+        .map((item) => String(item.assigned_technician || '').trim())
+        .filter(Boolean)
+    )
+  );
+
   const pendingCount = bookings.filter((item) => (item.status || 'Pending') === 'Pending').length;
   const completedCount = bookings.filter((item) => item.status === 'Completed').length;
   const dueTodayCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueToday)).length;
   const dueSoonCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueSoon)).length;
   const overdueCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isOverdue)).length;
+  const amcExpiringCount = bookings.filter((item) => isAmcExpiringSoon(item.amc_expiry_date)).length;
 
   const totalRevenue = bookings
     .filter((item) => item.status === 'Completed')
@@ -909,17 +1044,31 @@ export default function Home() {
         ? Boolean(dueBadge?.isDueSoon)
         : statusFilter === 'Overdue'
         ? Boolean(dueBadge?.isOverdue)
+        : statusFilter === 'AmcExpiring'
+        ? isAmcExpiringSoon(item.amc_expiry_date)
         : currentStatus === statusFilter);
+
+    const matchesTechnician =
+      technicianFilter === 'all' ||
+      String(item.assigned_technician || '').trim() === technicianFilter;
+
     const q = searchQuery.toLowerCase();
     const matchesSearch =
       item.name.toLowerCase().includes(q) ||
       item.phone.includes(searchQuery) ||
       item.service.toLowerCase().includes(q) ||
+      String(item.appliance_info || '').toLowerCase().includes(q) ||
+      String(item.complaint_issue || '').toLowerCase().includes(q) ||
+      String(item.assigned_technician || '').toLowerCase().includes(q) ||
       String(item.parts_used || '').toLowerCase().includes(q) ||
       String(item.payment_note || '').toLowerCase().includes(q) ||
       String(item.payment_method || '').toLowerCase().includes(q);
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesTechnician && matchesSearch;
   });
+
+  const selectedHistoryRecords = selectedHistoryPhone
+    ? bookings.filter((b) => String(b.phone || '').trim() === selectedHistoryPhone)
+    : [];
 
   if (authChecking) {
     return (
@@ -1364,7 +1513,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-1">
-            <h2 className="text-lg font-semibold text-cyan-400 mb-4">New Booking</h2>
+            <h2 className="text-lg font-semibold text-cyan-400 mb-4">New Booking &amp; Job Card</h2>
             {!canCreateBooking ? (
               <p className="text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-4">
                 Technician role has view &amp; status update access only.
@@ -1373,7 +1522,7 @@ export default function Home() {
               <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Phone Number (Auto-Checks History)
+                    1. Phone Number (Auto-Checks History)
                   </label>
                   <input
                     type="tel"
@@ -1409,7 +1558,21 @@ export default function Home() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Service Type
+                    Machine / Appliance Info
+                  </label>
+                  <input
+                    type="text"
+                    value={applianceInfo}
+                    onChange={(e) => setApplianceInfo(e.target.value)}
+                    placeholder="e.g. Split AC 1.5 Ton, Kent RO"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    2. Service Type
                   </label>
                   <select
                     value={service}
@@ -1427,14 +1590,83 @@ export default function Home() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Service Price (₹)
+                    Complaint / Job Card Issue
+                  </label>
+                  <input
+                    type="text"
+                    value={complaintIssue}
+                    onChange={(e) => setComplaintIssue(e.target.value)}
+                    placeholder="e.g. Low cooling, water leakage, filter change"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    3. Assign Technician
+                  </label>
+                  <input
+                    type="text"
+                    list="technician-suggestions"
+                    value={assignedTechnician}
+                    onChange={(e) => setAssignedTechnician(e.target.value)}
+                    placeholder="Technician name or email"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                  <datalist id="technician-suggestions">
+                    {technicianOptions.map((tech) => (
+                      <option key={tech} value={tech} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                      4. Parts Cost (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={partsCost}
+                      onChange={(e) => setPartsCost(e.target.value)}
+                      placeholder="0"
+                      autoComplete="off"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                      Labour Charge (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={labourCost}
+                      onChange={(e) => setLabourCost(e.target.value)}
+                      placeholder="0"
+                      autoComplete="off"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    5. Total Service Price (₹)
                   </label>
                   <input
                     type="number"
                     required
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    placeholder="Enter amount in ₹"
+                    placeholder={
+                      Number(partsCost) || Number(labourCost)
+                        ? `Auto total: ₹${(Number(partsCost) || 0) + (Number(labourCost) || 0)}`
+                        : 'Enter total amount in ₹'
+                    }
                     autoComplete="off"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
                   />
@@ -1485,7 +1717,7 @@ export default function Home() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    AMC / Warranty Expiry (Optional)
+                    6. AMC / Warranty Expiry (Optional)
                   </label>
                   <input
                     type="date"
@@ -1498,7 +1730,7 @@ export default function Home() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Next Service Date
+                    Next Service Reminder Date
                   </label>
                   <input
                     type="date"
@@ -1509,26 +1741,12 @@ export default function Home() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Shop Name (Auto-Syncs)
-                  </label>
-                  <input
-                    type="text"
-                    value={providerName}
-                    onChange={(e) => setProviderName(e.target.value)}
-                    placeholder="Enter shop name"
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
                 <button
                   type="submit"
                   disabled={loading || isExpired}
                   className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50"
                 >
-                  {loading ? 'Saving...' : 'Confirm & Save Booking'}
+                  {loading ? 'Saving...' : 'Confirm & Save Job Card'}
                 </button>
               </form>
             )}
@@ -1540,10 +1758,25 @@ export default function Home() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="🔍 Search by customer name, phone, service, parts or payment..."
+                placeholder="🔍 Search by name, phone, machine, complaint, technician or parts..."
                 autoComplete="off"
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
               />
+
+              {technicianOptions.length > 0 && (
+                <select
+                  value={technicianFilter}
+                  onChange={(e) => setTechnicianFilter(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-xs font-semibold text-slate-200 focus:border-cyan-500"
+                >
+                  <option value="all">All Technicians</option>
+                  {technicianOptions.map((tech) => (
+                    <option key={tech} value={tech}>
+                      {tech}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               {canExportCsv && (
                 <button
@@ -1623,17 +1856,68 @@ export default function Home() {
               >
                 Overdue ({overdueCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('AmcExpiring')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'AmcExpiring'
+                    ? 'bg-purple-400 text-slate-950'
+                    : 'bg-slate-950 text-purple-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                AMC Expiring ({amcExpiringCount})
+              </button>
             </div>
 
-            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {selectedHistoryPhone && (
+              <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-cyan-300">
+                    📜 Service History — {selectedHistoryPhone} ({selectedHistoryRecords.length} visits)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryPhone(null)}
+                    className="text-xs text-slate-400 hover:text-white"
+                  >
+                    Close ✕
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {selectedHistoryRecords.map((rec, i) => (
+                    <div
+                      key={rec.id || i}
+                      className="text-xs bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 flex flex-wrap justify-between gap-2"
+                    >
+                      <span className="text-white font-semibold">
+                        {rec.service}
+                        {rec.appliance_info ? ` (${rec.appliance_info})` : ''}
+                      </span>
+                      <span className="text-slate-400">
+                        {rec.status || 'Pending'}
+                        {canViewRevenue ? ` • ₹${rec.price || 0}` : ''}
+                        {rec.next_service_date ? ` • Next: ${rec.next_service_date}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">Koi matching booking nahi mili.</p>
               ) : (
                 filteredBookings.map((item, index) => {
                   const dueBadge = getDueBadge(item.next_service_date);
+                  const amcAlert = isAmcExpiringSoon(item.amc_expiry_date);
                   const isEditing = editingBookingId === item.id;
                   const payMode = normalizePaymentMethod(item.payment_method);
                   const callHref = buildCallUrl(item.phone);
+                  const phoneKey = String(item.phone || '').trim();
+                  const totalCustomerVisits = phoneKey
+                    ? bookings.filter((b) => String(b.phone || '').trim() === phoneKey).length
+                    : 1;
 
                   if (isEditing) {
                     return (
@@ -1644,7 +1928,7 @@ export default function Home() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold uppercase text-cyan-400">
-                            Edit Booking #{item.id}
+                            Edit Job Card #{item.id}
                           </span>
                           <button
                             type="button"
@@ -1673,6 +1957,13 @@ export default function Home() {
                             placeholder="10-digit Phone"
                             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
                           />
+                          <input
+                            type="text"
+                            value={editApplianceInfo}
+                            onChange={(e) => setEditApplianceInfo(e.target.value)}
+                            placeholder="Machine / Appliance Info"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
                           <select
                             value={editService}
                             onChange={(e) => setEditService(e.target.value)}
@@ -1686,11 +1977,41 @@ export default function Home() {
                             <option value="Home Cleaning">Home Cleaning</option>
                           </select>
                           <input
+                            type="text"
+                            value={editComplaintIssue}
+                            onChange={(e) => setEditComplaintIssue(e.target.value)}
+                            placeholder="Complaint / Job Card Issue"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
+                            type="text"
+                            value={editAssignedTechnician}
+                            onChange={(e) => setEditAssignedTechnician(e.target.value)}
+                            placeholder="Assigned Technician"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={editPartsCost}
+                            onChange={(e) => setEditPartsCost(e.target.value)}
+                            placeholder="Parts Cost (₹)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={editLabourCost}
+                            onChange={(e) => setEditLabourCost(e.target.value)}
+                            placeholder="Labour Charge (₹)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
                             type="number"
                             required
                             value={editPrice}
                             onChange={(e) => setEditPrice(e.target.value)}
-                            placeholder="Amount (₹)"
+                            placeholder="Total Amount (₹)"
                             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
                           />
                           <select
@@ -1763,7 +2084,7 @@ export default function Home() {
                       key={item.id || index}
                       className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
                     >
-                      <div>
+                      <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-bold text-white text-base">{item.name}</h3>
                           {item.id && (
@@ -1777,8 +2098,15 @@ export default function Home() {
                             </span>
                           )}
                           {item.amc_expiry_date && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/15 text-purple-200 border border-purple-500/30">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                amcAlert
+                                  ? 'bg-purple-500/25 text-purple-200 border-purple-400/50'
+                                  : 'bg-purple-500/15 text-purple-200 border-purple-500/30'
+                              }`}
+                            >
                               AMC: {item.amc_expiry_date}
+                              {amcAlert ? ' (Expiring)' : ''}
                             </span>
                           )}
                           <span
@@ -1793,18 +2121,29 @@ export default function Home() {
                             {payMode}
                           </span>
                         </div>
-                        <p className="text-slate-400 text-xs mt-0.5">
+                        <p className="text-slate-400 text-xs">
                           📞 {item.phone}
+                          {item.appliance_info ? ` | 🖥️ ${item.appliance_info}` : ''}
                           {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
-                          {item.next_service_date && ` | 📅 ${item.next_service_date}`}
+                          {item.next_service_date ? ` | 📅 ${item.next_service_date}` : ''}
                         </p>
+                        {(item.complaint_issue || item.assigned_technician) && (
+                          <p className="text-slate-300 text-xs">
+                            {item.complaint_issue ? `🔧 Issue: ${item.complaint_issue}` : ''}
+                            {item.complaint_issue && item.assigned_technician ? ' • ' : ''}
+                            {item.assigned_technician ? `👷 Tech: ${item.assigned_technician}` : ''}
+                          </p>
+                        )}
                         {item.parts_used && (
-                          <p className="text-cyan-300/90 text-xs mt-1">
+                          <p className="text-cyan-300/90 text-xs">
                             🛠️ Parts: {item.parts_used}
+                            {canViewRevenue && (Number(item.parts_cost) > 0 || Number(item.labour_cost) > 0)
+                              ? ` (Parts ₹${Number(item.parts_cost) || 0} + Labour ₹${Number(item.labour_cost) || 0})`
+                              : ''}
                           </p>
                         )}
                         {item.payment_note && (
-                          <p className="text-amber-300/90 text-xs mt-0.5">
+                          <p className="text-amber-300/90 text-xs">
                             📝 Note: {item.payment_note}
                           </p>
                         )}
@@ -1814,6 +2153,18 @@ export default function Home() {
                         <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full text-xs font-semibold">
                           {item.service}
                         </span>
+
+                        {phoneKey && totalCustomerVisits > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedHistoryPhone(selectedHistoryPhone === phoneKey ? null : phoneKey)
+                            }
+                            className="bg-slate-800 text-cyan-300 border border-cyan-500/30 hover:bg-slate-700 px-2.5 py-1 rounded-full text-xs font-semibold transition"
+                          >
+                            📜 {totalCustomerVisits} Visits
+                          </button>
+                        )}
 
                         {callHref && (
                           <a
