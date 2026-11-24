@@ -30,6 +30,15 @@ export default function Home() {
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState<any[]>([]);
+  const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editService, setEditService] = useState('AC Repair & Service');
+  const [editPrice, setEditPrice] = useState('');
+  const [editStatus, setEditStatus] = useState('Pending');
+  const [editNextServiceDate, setEditNextServiceDate] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingBookingId, setDeletingBookingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -45,6 +54,7 @@ export default function Home() {
   const canManageRoles = userRole === 'owner' || userRole === 'super_admin';
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
+  const canEditOrDeleteBooking = userRole !== 'technician';
 
   const getDueBadge = (dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -461,6 +471,81 @@ export default function Home() {
     setLoading(false);
   };
 
+  const startEditingBooking = (item: any) => {
+    if (!canEditOrDeleteBooking) {
+      alert('Technician role cannot edit bookings.');
+      return;
+    }
+    setEditingBookingId(item.id);
+    setEditName(item.name || '');
+    setEditPhone(item.phone || '');
+    setEditService(item.service || 'AC Repair & Service');
+    setEditPrice(String(item.price ?? ''));
+    setEditStatus(item.status || 'Pending');
+    setEditNextServiceDate(item.next_service_date || '');
+  };
+
+  const cancelEditingBooking = () => {
+    setEditingBookingId(null);
+    setEditName('');
+    setEditPhone('');
+    setEditService('AC Repair & Service');
+    setEditPrice('');
+    setEditStatus('Pending');
+    setEditNextServiceDate('');
+  };
+
+  const handleSaveBookingEdit = async (e: React.FormEvent, id: number) => {
+    e.preventDefault();
+    if (!canEditOrDeleteBooking) {
+      alert('Technician role cannot edit bookings.');
+      return;
+    }
+    setSavingEdit(true);
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        service: editService,
+        price: Number(editPrice) || 0,
+        status: editStatus,
+        next_service_date: editNextServiceDate || null,
+      })
+      .eq('id', id);
+
+    if (error) {
+      alert('Update error: ' + error.message);
+    } else {
+      cancelEditingBooking();
+      await fetchBookings(workspaceOwnerId || userId);
+    }
+    setSavingEdit(false);
+  };
+
+  const handleDeleteBooking = async (id: number, customerName: string) => {
+    if (!canEditOrDeleteBooking) {
+      alert('Technician role cannot delete bookings.');
+      return;
+    }
+    const confirmed = window.confirm(`Delete booking for "${customerName}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingBookingId(id);
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
+
+    if (error) {
+      alert('Delete error: ' + error.message);
+    } else {
+      if (editingBookingId === id) {
+        cancelEditingBooking();
+      }
+      await fetchBookings(workspaceOwnerId || userId);
+    }
+    setDeletingBookingId(null);
+  };
+
   const toggleStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
     await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
@@ -474,28 +559,83 @@ export default function Home() {
     }
     const printWindow = window.open('', '_blank');
     if (printWindow) {
+      const invoiceDate = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+      const amountVal = Number(item.price) || 0;
+      const statusText = item.status || 'Pending';
+
       printWindow.document.write(`
         <html>
           <head>
-            <title>Service Invoice - ${item.name}</title>
+            <title>Invoice #${item.id ?? ''} - ${item.name}</title>
             <style>
-              body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
-              .invoice-box { max-width: 600px; margin: auto; padding: 30px; border: 1px solid #eee; }
-              .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+              body { font-family: Arial, sans-serif; padding: 28px; color: #0f172a; background: #f8fafc; }
+              .invoice-box { max-width: 640px; margin: auto; padding: 32px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; }
+              .top-bar { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; }
+              .shop-title { margin: 0; font-size: 24px; color: #0f172a; }
+              .meta { text-align: right; font-size: 13px; color: #475569; line-height: 1.5; }
+              .grid-2 { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 22px; font-size: 14px; }
+              .box-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
+              .box-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 6px; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+              th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 14px; }
+              th { background: #f1f5f9; font-weight: bold; }
+              .total-row td { font-weight: bold; font-size: 16px; background: #f8fafc; }
+              .footer { margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #64748b; text-align: center; }
             </style>
           </head>
           <body>
             <div class="invoice-box">
-              <div class="header">
-                <h2>${providerName}</h2>
-                <p>Service Invoice</p>
+              <div class="top-bar">
+                <div>
+                  <h2 class="shop-title">${providerName}</h2>
+                  <div style="font-size: 13px; color: #475569; margin-top: 4px;">Service Invoice &amp; Receipt</div>
+                </div>
+                <div class="meta">
+                  <div><strong>Invoice No:</strong> #${item.id ?? 'N/A'}</div>
+                  <div><strong>Date:</strong> ${invoiceDate}</div>
+                  <div><strong>Status:</strong> ${statusText}</div>
+                </div>
               </div>
-              <p><strong>Customer:</strong> ${item.name}</p>
-              <p><strong>Phone:</strong> ${item.phone}</p>
-              <p><strong>Service:</strong> ${item.service}</p>
-              <p><strong>Amount:</strong> ₹${item.price || 0}</p>
-              <p><strong>Status:</strong> ${item.status || 'Pending'}</p>
-              ${item.next_service_date ? `<p><strong>Next Service Date:</strong> ${item.next_service_date}</p>` : ''}
+
+              <div class="grid-2">
+                <div class="box-card">
+                  <div class="box-label">Customer Details</div>
+                  <div><strong>Name:</strong> ${item.name}</div>
+                  <div style="margin-top: 4px;"><strong>Phone:</strong> ${item.phone}</div>
+                </div>
+                <div class="box-card">
+                  <div class="box-label">Service Schedule</div>
+                  <div><strong>Service:</strong> ${item.service}</div>
+                  <div style="margin-top: 4px;"><strong>Next Service:</strong> ${item.next_service_date || 'Not Scheduled'}</div>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th style="text-align: right;">Amount (INR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>${item.service}</td>
+                    <td style="text-align: right;">₹${amountVal}</td>
+                  </tr>
+                  <tr class="total-row">
+                    <td>Total Payable</td>
+                    <td style="text-align: right;">₹${amountVal}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="footer">
+                Thank you for choosing ${providerName}. Keep this invoice for your service records.
+              </div>
             </div>
             <script>window.onload = function() { window.print(); }</script>
           </body>
@@ -1122,12 +1262,107 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">Koi matching booking nahi mili.</p>
               ) : (
                 filteredBookings.map((item, index) => {
                   const dueBadge = getDueBadge(item.next_service_date);
+                  const isEditing = editingBookingId === item.id;
+
+                  if (isEditing) {
+                    return (
+                      <form
+                        key={item.id || index}
+                        onSubmit={(e) => handleSaveBookingEdit(e, item.id)}
+                        className="bg-slate-950 border border-cyan-500/40 p-4 rounded-xl space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase text-cyan-400">
+                            Edit Booking #{item.id}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={cancelEditingBooking}
+                            className="text-xs text-slate-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            required
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Customer Name"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
+                            type="tel"
+                            required
+                            maxLength={10}
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="10-digit Phone"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <select
+                            value={editService}
+                            onChange={(e) => setEditService(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          >
+                            <option value="AC Repair & Service">AC Repair &amp; Service</option>
+                            <option value="Plumbing">Plumbing</option>
+                            <option value="Electrical Work">Electrical Work</option>
+                            <option value="Carpentry">Carpentry</option>
+                            <option value="Home Cleaning">Home Cleaning</option>
+                          </select>
+                          <input
+                            type="number"
+                            required
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            placeholder="Amount (₹)"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <select
+                            value={editStatus}
+                            onChange={(e) => setEditStatus(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={editNextServiceDate}
+                            onChange={(e) => setEditNextServiceDate(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelEditingBooking}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={savingEdit}
+                            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+                          >
+                            {savingEdit ? 'Saving...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </form>
+                    );
+                  }
+
                   return (
                     <div
                       key={item.id || index}
@@ -1136,6 +1371,11 @@ export default function Home() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-bold text-white text-base">{item.name}</h3>
+                          {item.id && (
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              #{item.id}
+                            </span>
+                          )}
                           {dueBadge && (
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${dueBadge.className}`}>
                               {dueBadge.label}
@@ -1192,6 +1432,26 @@ export default function Home() {
                             >
                               💬 WhatsApp &amp; Review
                             </a>
+                          </>
+                        )}
+
+                        {canEditOrDeleteBooking && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEditingBooking(item)}
+                              className="bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 px-2.5 py-1 rounded-full text-xs font-semibold transition"
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingBookingId === item.id}
+                              onClick={() => handleDeleteBooking(item.id, item.name)}
+                              className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-2.5 py-1 rounded-full text-xs font-semibold transition disabled:opacity-50"
+                            >
+                              {deletingBookingId === item.id ? 'Deleting...' : '🗑️ Delete'}
+                            </button>
                           </>
                         )}
                       </div>
