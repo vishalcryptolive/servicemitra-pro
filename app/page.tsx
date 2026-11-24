@@ -27,6 +27,7 @@ export default function Home() {
   const [partsUsed, setPartsUsed] = useState('');
   const [amcExpiryDate, setAmcExpiryDate] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
+  const [showExtraBookingFields, setShowExtraBookingFields] = useState(false);
   const [providerName, setProviderName] = useState('My Service Shop');
   const [shopPhone, setShopPhone] = useState('');
   const [shopAddress, setShopAddress] = useState('');
@@ -107,8 +108,8 @@ export default function Home() {
 
     if (diffDays < 0) {
       return {
-        label: `Overdue (${Math.abs(diffDays)}d)`,
-        className: 'bg-red-500/15 text-red-300 border border-red-500/30',
+        label: `🔴 Overdue (${Math.abs(diffDays)}d)`,
+        className: 'bg-red-50 text-red-700 border border-red-200',
         isDueToday: false,
         isDueSoon: false,
         isOverdue: true,
@@ -116,8 +117,8 @@ export default function Home() {
     }
     if (diffDays === 0) {
       return {
-        label: 'Due Today',
-        className: 'bg-rose-500/20 text-rose-200 border border-rose-500/40',
+        label: '🔴 Due Today',
+        className: 'bg-rose-50 text-rose-700 border border-rose-200',
         isDueToday: true,
         isDueSoon: true,
         isOverdue: false,
@@ -125,16 +126,16 @@ export default function Home() {
     }
     if (diffDays <= 7) {
       return {
-        label: `Due in ${diffDays}d`,
-        className: 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30',
+        label: `🔵 Due in ${diffDays}d`,
+        className: 'bg-sky-50 text-sky-700 border border-sky-200',
         isDueToday: false,
         isDueSoon: true,
         isOverdue: false,
       };
     }
     return {
-      label: `Next: ${dateStr}`,
-      className: 'bg-slate-800 text-slate-300 border border-slate-700',
+      label: `🗓️ Next: ${dateStr}`,
+      className: 'bg-slate-100 text-slate-700 border border-slate-200',
       isDueToday: false,
       isDueSoon: false,
       isOverdue: false,
@@ -485,7 +486,7 @@ export default function Home() {
         email: userEmail,
       },
       theme: {
-        color: '#06b6d4',
+        color: '#0d9488',
       },
     };
 
@@ -590,6 +591,7 @@ export default function Home() {
       setPartsUsed('');
       setAmcExpiryDate('');
       setNextServiceDate('');
+      setShowExtraBookingFields(false);
       fetchBookings(effectiveOwnerId);
     }
     setLoading(false);
@@ -901,21 +903,24 @@ export default function Home() {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Job Card & Invoice #${item.id ?? ''} - ${item.name}</title>
+            <title>Shop Receipt & Invoice #${item.id ?? ''} - ${item.name}</title>
             <style>
-              body { font-family: Arial, sans-serif; padding: 28px; color: #0f172a; background: #f8fafc; }
-              .invoice-box { max-width: 660px; margin: auto; padding: 32px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; }
-              .top-bar { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px; }
-              .shop-title { margin: 0; font-size: 24px; color: #0f172a; }
-              .meta { text-align: right; font-size: 13px; color: #475569; line-height: 1.5; }
-              .grid-2 { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 22px; font-size: 14px; }
-              .box-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
-              .box-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 6px; }
-              table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-              th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 14px; }
-              th { background: #f1f5f9; font-weight: bold; }
-              .total-row td { font-weight: bold; font-size: 16px; background: #f8fafc; }
-              .footer { margin-top: 24px; padding-top: 14px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #64748b; text-align: center; }
+              body { font-family: 'Segoe UI', Arial, sans-serif; padding: 24px; color: #0f172a; background: #f1f5f9; }
+              .invoice-box { max-width: 680px; margin: auto; padding: 30px; background: #ffffff; border: 1px solid #cbd5e1; border-top: 6px solid #0f766e; border-radius: 12px; }
+              .top-bar { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px; }
+              .shop-title { margin: 0; font-size: 24px; font-weight: 800; color: #0f172a; }
+              .shop-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 999px; background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+              .meta { text-align: right; font-size: 13px; color: #334155; line-height: 1.6; }
+              .grid-2 { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; font-size: 13.5px; }
+              .box-card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+              .box-label { font-size: 11px; text-transform: uppercase; color: #0f766e; font-weight: 800; letter-spacing: 0.04em; margin-bottom: 8px; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+              th, td { border: 1px solid #e2e8f0; padding: 11px 12px; text-align: left; font-size: 13.5px; }
+              th { background: #f8fafc; font-weight: 700; color: #1e293b; }
+              .pay-strip { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; }
+              .pay-pill { padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+              .total-row td { font-weight: 800; font-size: 16px; background: #f0fdfa; color: #0f172a; }
+              .footer { margin-top: 22px; padding-top: 14px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #64748b; text-align: center; }
             </style>
           </head>
           <body>
@@ -923,14 +928,14 @@ export default function Home() {
               <div class="top-bar">
                 <div>
                   <h2 class="shop-title">${providerName}</h2>
-                  ${shopPhone ? `<div style="font-size: 13px; color: #334155; margin-top: 4px;">Phone: ${shopPhone}</div>` : ''}
-                  ${shopAddress ? `<div style="font-size: 13px; color: #475569; margin-top: 2px;">Address: ${shopAddress}</div>` : ''}
-                  <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Job Card, Service Invoice &amp; Receipt</div>
+                  <span class="shop-badge">Official Service Bill &amp; Job Receipt</span>
+                  ${shopPhone ? `<div style="font-size: 13px; color: #334155; margin-top: 8px;"><strong>Contact:</strong> ${shopPhone}</div>` : ''}
+                  ${shopAddress ? `<div style="font-size: 13px; color: #475569; margin-top: 2px;"><strong>Address:</strong> ${shopAddress}</div>` : ''}
                 </div>
                 <div class="meta">
-                  <div><strong>Job / Invoice No:</strong> #${item.id ?? 'N/A'}</div>
-                  <div><strong>Date:</strong> ${invoiceDate}</div>
-                  <div><strong>Status:</strong> ${statusText}</div>
+                  <div><strong>Bill / Job No:</strong> #${item.id ?? 'N/A'}</div>
+                  <div><strong>Bill Date:</strong> ${invoiceDate}</div>
+                  <div><strong>Work Status:</strong> ${statusText}</div>
                   ${item.assigned_technician ? `<div><strong>Technician:</strong> ${item.assigned_technician}</div>` : ''}
                 </div>
               </div>
@@ -938,26 +943,26 @@ export default function Home() {
               <div class="grid-2">
                 <div class="box-card">
                   <div class="box-label">Customer &amp; Machine</div>
-                  <div><strong>Name:</strong> ${item.name}</div>
-                  <div style="margin-top: 4px;"><strong>Phone:</strong> ${item.phone}</div>
-                  <div style="margin-top: 4px;"><strong>Machine:</strong> ${item.appliance_info || 'Not Specified'}</div>
-                  <div style="margin-top: 4px;"><strong>Total Visits:</strong> ${visitCount}</div>
+                  <div><strong>Customer:</strong> ${item.name}</div>
+                  <div style="margin-top: 5px;"><strong>Mobile:</strong> ${item.phone}</div>
+                  <div style="margin-top: 5px;"><strong>Machine / Unit:</strong> ${item.appliance_info || 'Not Specified'}</div>
+                  <div style="margin-top: 5px;"><strong>Customer Visits:</strong> ${visitCount}</div>
                 </div>
                 <div class="box-card">
-                  <div class="box-label">Job, AMC &amp; Schedule</div>
-                  <div><strong>Service:</strong> ${item.service}</div>
-                  <div style="margin-top: 4px;"><strong>Complaint:</strong> ${item.complaint_issue || 'General Service'}</div>
-                  <div style="margin-top: 4px;"><strong>Parts Used:</strong> ${item.parts_used || 'None / Standard'}</div>
-                  <div style="margin-top: 4px;"><strong>AMC Expiry:</strong> ${item.amc_expiry_date || 'N/A'}</div>
-                  <div style="margin-top: 4px;"><strong>Next Service:</strong> ${item.next_service_date || 'Not Scheduled'}</div>
+                  <div class="box-label">Service, AMC &amp; Schedule</div>
+                  <div><strong>Service Type:</strong> ${item.service}</div>
+                  <div style="margin-top: 5px;"><strong>Complaint:</strong> ${item.complaint_issue || 'General Service'}</div>
+                  <div style="margin-top: 5px;"><strong>Parts Used:</strong> ${item.parts_used || 'None / Standard'}</div>
+                  <div style="margin-top: 5px;"><strong>AMC Expiry:</strong> ${item.amc_expiry_date || 'N/A'}</div>
+                  <div style="margin-top: 5px;"><strong>Next Service:</strong> ${item.next_service_date || 'Not Scheduled'}</div>
                 </div>
               </div>
 
               <table>
                 <thead>
                   <tr>
-                    <th>Description</th>
-                    <th style="text-align: right;">Amount (INR)</th>
+                    <th>Service / Item Description</th>
+                    <th style="text-align: right;">Amount (₹)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -965,35 +970,42 @@ export default function Home() {
                     pCostVal > 0 || lCostVal > 0
                       ? `
                         <tr>
-                          <td>Parts / Material (${item.parts_used || 'Spares'})</td>
+                          <td>Parts / Spares (${item.parts_used || 'Standard Parts'})</td>
                           <td style="text-align: right;">₹${pCostVal}</td>
                         </tr>
                         <tr>
-                          <td>Service / Labour Charge (${item.service})</td>
+                          <td>Service / Labour (${item.service})</td>
                           <td style="text-align: right;">₹${lCostVal}</td>
                         </tr>
                       `
                       : `
                         <tr>
-                          <td>${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}</td>
+                          <td>${item.service}${item.parts_used ? ` — ${item.parts_used}` : ''}</td>
                           <td style="text-align: right;">₹${amountVal}</td>
                         </tr>
                       `
                   }
-                  <tr>
-                    <td colspan="2" style="font-size: 12px; color: #475569;">
-                      Payment Mode: <strong>${payMode}</strong>${item.payment_note ? ` • Note: ${item.payment_note}` : ''}
-                    </td>
-                  </tr>
                   <tr class="total-row">
-                    <td>Total Payable (${payMode})</td>
+                    <td>Grand Total</td>
                     <td style="text-align: right;">₹${amountVal}</td>
                   </tr>
                 </tbody>
               </table>
 
+              <div class="pay-strip">
+                <div>
+                  <strong>Payment Mode:</strong>
+                  <span class="pay-pill" style="background: ${
+                    payMode === 'Cash' ? '#dcfce7; color: #166534;' : payMode === 'UPI' ? '#e0f2fe; color: #075985;' : '#fef3c7; color: #92400e;'
+                  }">${payMode}</span>
+                </div>
+                <div style="color: #334155;">
+                  ${item.payment_note ? `<strong>Note:</strong> ${item.payment_note}` : '<strong>Note:</strong> —'}
+                </div>
+              </div>
+
               <div class="footer">
-                Thank you for choosing ${providerName}. Keep this job card &amp; invoice for your service records.
+                Thank you for visiting <strong>${providerName}</strong>. Please keep this receipt for AMC &amp; service support.
               </div>
             </div>
             <script>window.onload = function() { window.print(); }</script>
@@ -1072,42 +1084,42 @@ export default function Home() {
 
   if (authChecking) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-        <p className="text-sm text-slate-400">Loading ServiceMitra...</p>
+      <main className="min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center p-6">
+        <p className="text-sm font-medium text-slate-500">Loading ServiceMitra...</p>
       </main>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-        <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 font-black text-slate-950">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 font-black text-white shadow-sm">
                 SM
               </div>
               <div>
-                <span className="text-lg font-extrabold tracking-tight text-white">
+                <span className="text-lg font-extrabold tracking-tight text-slate-900">
                   ServiceMitra Pro
                 </span>
-                <span className="ml-2 hidden rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-xs font-medium text-cyan-300 sm:inline-block">
-                  Service Bookings & Billing
+                <span className="ml-2 hidden rounded-full bg-teal-50 border border-teal-200 px-2.5 py-0.5 text-xs font-semibold text-teal-700 sm:inline-block">
+                  Service Bookings &amp; Billing
                 </span>
               </div>
             </div>
 
-            <nav className="hidden items-center gap-6 text-sm font-medium text-slate-300 md:flex">
-              <button type="button" onClick={() => scrollToSection('features')} className="hover:text-white transition">
+            <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
+              <button type="button" onClick={() => scrollToSection('features')} className="hover:text-teal-700 transition">
                 Features
               </button>
-              <button type="button" onClick={() => scrollToSection('pricing')} className="hover:text-white transition">
+              <button type="button" onClick={() => scrollToSection('pricing')} className="hover:text-teal-700 transition">
                 Pricing
               </button>
-              <button type="button" onClick={() => scrollToSection('policies')} className="hover:text-white transition">
+              <button type="button" onClick={() => scrollToSection('policies')} className="hover:text-teal-700 transition">
                 Policies
               </button>
-              <button type="button" onClick={() => scrollToSection('contact')} className="hover:text-white transition">
+              <button type="button" onClick={() => scrollToSection('contact')} className="hover:text-teal-700 transition">
                 Contact
               </button>
             </nav>
@@ -1115,13 +1127,13 @@ export default function Home() {
             <div className="flex items-center gap-2.5">
               <a
                 href="/login"
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 transition"
               >
                 Login
               </a>
               <a
                 href="/signup"
-                className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400 transition"
+                className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 transition shadow-sm"
               >
                 Start Free Trial
               </a>
@@ -1129,34 +1141,34 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="mx-auto max-w-6xl px-4 pt-14 pb-12">
-          <div className="rounded-3xl border border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 p-8 shadow-2xl md:p-12">
-            <p className="inline-block rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-xs font-semibold text-cyan-300">
-              For AC Repair, RO Service, Plumbing, Electrical, Carpentry & Home Services
+        <section className="mx-auto max-w-6xl px-4 pt-12 pb-10">
+          <div className="rounded-3xl border border-teal-200 bg-white p-8 shadow-sm md:p-12">
+            <p className="inline-block rounded-full border border-teal-200 bg-teal-50 px-3.5 py-1 text-xs font-semibold text-teal-700">
+              For AC Repair, RO Service, Plumbing, Electrical, Carpentry &amp; Home Services
             </p>
-            <h1 className="mt-5 max-w-3xl text-3xl font-extrabold leading-tight text-white sm:text-5xl">
-              Manage service bookings, customer history, invoices & WhatsApp follow-ups in one place.
+            <h1 className="mt-5 max-w-3xl text-3xl font-extrabold leading-tight text-slate-900 sm:text-5xl">
+              Manage service bookings, customer history, invoices &amp; WhatsApp follow-ups in one place.
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
               ServiceMitra Pro helps service shops and technicians track pending or completed jobs, check repeat customer visits, print bills, and send WhatsApp updates effortlessly.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <a
                 href="/signup"
-                className="rounded-xl bg-cyan-400 px-7 py-3.5 text-base font-extrabold text-slate-950 shadow-lg shadow-cyan-500/25 hover:bg-cyan-300 transition"
+                className="rounded-xl bg-teal-600 px-7 py-3.5 text-base font-extrabold text-white shadow-sm hover:bg-teal-700 transition"
               >
                 Start Free Trial →
               </a>
               <button
                 type="button"
                 onClick={() => scrollToSection('pricing')}
-                className="rounded-xl border-2 border-cyan-500/50 bg-slate-900/90 px-6 py-3.5 text-base font-bold text-cyan-300 hover:bg-slate-800 hover:text-white transition"
+                className="rounded-xl border border-teal-300 bg-teal-50 px-6 py-3.5 text-base font-bold text-teal-800 hover:bg-teal-100 transition"
               >
                 View Plans (₹499 / ₹1,999)
               </button>
               <a
                 href="/login"
-                className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-300 underline-offset-4 hover:text-white hover:underline"
+                className="rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline"
               >
                 Already have an account? Login
               </a>
@@ -1164,84 +1176,84 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="features" className="mx-auto max-w-6xl px-4 py-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">Key Features</h2>
+        <section id="features" className="mx-auto max-w-6xl px-4 py-10">
+          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Key Features</h2>
           <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-              <h3 className="text-lg font-semibold text-cyan-400">Repeat Customer History</h3>
-              <p className="mt-2 text-sm text-slate-300">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-teal-700">Repeat Customer History</h3>
+              <p className="mt-2 text-sm text-slate-600">
                 Automatically checks past visits when entering a 10-digit mobile number so you know returning customers immediately.
               </p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-              <h3 className="text-lg font-semibold text-emerald-400">Instant Bills & Status Tracking</h3>
-              <p className="mt-2 text-sm text-slate-300">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-emerald-700">Instant Bills &amp; Status Tracking</h3>
+              <p className="mt-2 text-sm text-slate-600">
                 Switch booking status between Pending and Completed, track completed revenue, and print clean service invoices.
               </p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-              <h3 className="text-lg font-semibold text-sky-400">WhatsApp Bill & Review Sharing</h3>
-              <p className="mt-2 text-sm text-slate-300">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-sky-700">WhatsApp Bill &amp; Review Sharing</h3>
+              <p className="mt-2 text-sm text-slate-600">
                 Send service bill details and ask customers for a 5-star review directly over WhatsApp with one click.
               </p>
             </div>
           </div>
         </section>
 
-        <section id="pricing" className="mx-auto max-w-6xl px-4 py-12">
-          <h2 className="text-2xl font-bold text-white sm:text-3xl">Subscription Plans</h2>
-          <p className="mt-2 text-sm text-slate-400">
+        <section id="pricing" className="mx-auto max-w-6xl px-4 py-10">
+          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Subscription Plans</h2>
+          <p className="mt-2 text-sm text-slate-600">
             Transparent pricing in INR (₹). New accounts can start with a limited free trial before upgrading.
           </p>
 
           <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900 p-7">
+            <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
               <div>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-white">Monthly Plan</h3>
-                  <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-cyan-300">
+                  <h3 className="text-xl font-bold text-slate-900">Monthly Plan</h3>
+                  <span className="rounded-full bg-teal-50 border border-teal-200 px-3 py-1 text-xs font-semibold text-teal-700">
                     30 Days Validity
                   </span>
                 </div>
-                <p className="mt-4 text-4xl font-extrabold text-white">
-                  ₹499 <span className="text-sm font-normal text-slate-400">/ 30 days</span>
+                <p className="mt-4 text-4xl font-extrabold text-slate-900">
+                  ₹499 <span className="text-sm font-normal text-slate-500">/ 30 days</span>
                 </p>
-                <ul className="mt-6 space-y-2.5 text-sm text-slate-300">
-                  <li>• Unlimited service bookings & customer search</li>
-                  <li>• Printable service invoices & revenue tracking</li>
-                  <li>• One-click WhatsApp bill & review share</li>
+                <ul className="mt-6 space-y-2.5 text-sm text-slate-600">
+                  <li>• Unlimited service bookings &amp; customer search</li>
+                  <li>• Printable service invoices &amp; revenue tracking</li>
+                  <li>• One-click WhatsApp bill &amp; review share</li>
                   <li>• Support via {supportEmail}</li>
                 </ul>
               </div>
               <a
                 href="/login"
-                className="mt-8 block w-full rounded-xl bg-slate-800 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-slate-700 transition"
+                className="mt-8 block w-full rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-slate-800 transition"
               >
                 Login to Subscribe (₹499)
               </a>
             </div>
 
-            <div className="flex flex-col justify-between rounded-2xl border border-cyan-500/40 bg-slate-900 p-7">
+            <div className="flex flex-col justify-between rounded-2xl border-2 border-teal-500 bg-white p-7 shadow-sm">
               <div>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-white">Yearly Plan</h3>
-                  <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+                  <h3 className="text-xl font-bold text-slate-900">Yearly Plan</h3>
+                  <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700">
                     365 Days Validity
                   </span>
                 </div>
-                <p className="mt-4 text-4xl font-extrabold text-white">
-                  ₹1,999 <span className="text-sm font-normal text-slate-400">/ 365 days</span>
+                <p className="mt-4 text-4xl font-extrabold text-slate-900">
+                  ₹1,999 <span className="text-sm font-normal text-slate-500">/ 365 days</span>
                 </p>
-                <ul className="mt-6 space-y-2.5 text-sm text-slate-300">
+                <ul className="mt-6 space-y-2.5 text-sm text-slate-600">
                   <li>• Everything included in Monthly Plan</li>
                   <li>• Full 1-year uninterrupted subscription access</li>
-                  <li>• Ideal for active service shops & teams</li>
+                  <li>• Ideal for active service shops &amp; teams</li>
                   <li>• Support via {supportEmail}</li>
                 </ul>
               </div>
               <a
                 href="/login"
-                className="mt-8 block w-full rounded-xl bg-cyan-500 px-4 py-3 text-center text-sm font-bold text-slate-950 hover:bg-cyan-400 transition"
+                className="mt-8 block w-full rounded-xl bg-teal-600 px-4 py-3 text-center text-sm font-bold text-white hover:bg-teal-700 transition"
               >
                 Login to Subscribe (₹1,999)
               </a>
@@ -1249,13 +1261,13 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="policies" className="mx-auto max-w-6xl px-4 py-12">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 md:p-8">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <section id="policies" className="mx-auto max-w-6xl px-4 py-10">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
               <div>
-                <h2 className="text-2xl font-bold text-white">Policies & Terms</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Review our Refund & Cancellation, Privacy, and Terms of Service.
+                <h2 className="text-2xl font-bold text-slate-900">Policies &amp; Terms</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Review our Refund &amp; Cancellation, Privacy, and Terms of Service.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1264,19 +1276,19 @@ export default function Home() {
                   onClick={() => setActivePolicy('refund')}
                   className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                     activePolicy === 'refund'
-                      ? 'bg-cyan-500 text-slate-950 font-bold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-teal-600 text-white font-bold'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  Refund & Cancellation
+                  Refund &amp; Cancellation
                 </button>
                 <button
                   type="button"
                   onClick={() => setActivePolicy('privacy')}
                   className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                     activePolicy === 'privacy'
-                      ? 'bg-cyan-500 text-slate-950 font-bold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-teal-600 text-white font-bold'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   Privacy Policy
@@ -1286,19 +1298,19 @@ export default function Home() {
                   onClick={() => setActivePolicy('terms')}
                   className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                     activePolicy === 'terms'
-                      ? 'bg-cyan-500 text-slate-950 font-bold'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      ? 'bg-teal-600 text-white font-bold'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  Terms & Conditions
+                  Terms &amp; Conditions
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 space-y-3 text-sm leading-relaxed text-slate-300">
+            <div className="mt-6 space-y-3 text-sm leading-relaxed text-slate-700">
               {activePolicy === 'refund' && (
                 <>
-                  <h3 className="text-lg font-semibold text-white">Refund & Cancellation Policy</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">Refund &amp; Cancellation Policy</h3>
                   <p>
                     <strong>No Refund After Activation:</strong> Once a subscription plan (₹499 for 30 days or ₹1,999 for 365 days) is activated on your account, payments are <strong>non-refundable</strong>.
                   </p>
@@ -1307,7 +1319,7 @@ export default function Home() {
                   </p>
                   <p>
                     <strong>Technical / Duplicate Charge Exception:</strong> If a duplicate payment occurs or a verified technical issue prevents activation, contact{' '}
-                    <a href={`mailto:${supportEmail}`} className="text-cyan-400 underline">
+                    <a href={`mailto:${supportEmail}`} className="text-teal-700 font-semibold underline">
                       {supportEmail}
                     </a>{' '}
                     with your payment ID for verification and resolution.
@@ -1317,7 +1329,7 @@ export default function Home() {
 
               {activePolicy === 'privacy' && (
                 <>
-                  <h3 className="text-lg font-semibold text-white">Privacy Policy</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">Privacy Policy</h3>
                   <p>
                     ServiceMitra Pro stores only the account, shop profile, and service booking details required to operate your workspace. We do not sell user data to third parties.
                   </p>
@@ -1329,7 +1341,7 @@ export default function Home() {
 
               {activePolicy === 'terms' && (
                 <>
-                  <h3 className="text-lg font-semibold text-white">Terms & Conditions</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">Terms &amp; Conditions</h3>
                   <p>
                     By using ServiceMitra Pro, you agree to use the platform for lawful business and service record management. Subscription validity and access depend on active plan status.
                   </p>
@@ -1339,28 +1351,28 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="contact" className="mx-auto max-w-6xl px-4 pt-2 pb-16">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 md:p-8">
-            <h2 className="text-2xl font-bold text-white">Contact Us</h2>
-            <p className="mt-2 text-sm text-slate-400">
+        <section id="contact" className="mx-auto max-w-6xl px-4 pt-2 pb-14">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+            <h2 className="text-2xl font-bold text-slate-900">Contact Us</h2>
+            <p className="mt-2 text-sm text-slate-600">
               For support, billing queries, or account assistance, contact us below.
             </p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs font-semibold uppercase text-slate-400">Support Email</p>
-                <a href={`mailto:${supportEmail}`} className="mt-1 block text-base font-medium text-cyan-400 hover:underline">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase text-slate-500">Support Email</p>
+                <a href={`mailto:${supportEmail}`} className="mt-1 block text-base font-semibold text-teal-700 hover:underline">
                   {supportEmail}
                 </a>
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs font-semibold uppercase text-slate-400">Business Location</p>
-                <p className="mt-1 text-base font-medium text-white">{businessLocation}</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase text-slate-500">Business Location</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">{businessLocation}</p>
               </div>
             </div>
           </div>
         </section>
 
-        <footer className="mt-auto border-t border-slate-800 bg-slate-950 py-6 text-sm text-slate-400">
+        <footer className="mt-auto border-t border-slate-200 bg-white py-6 text-sm text-slate-600">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row">
             <p>© {new Date().getFullYear()} ServiceMitra Pro • {businessLocation}</p>
             <div className="flex flex-wrap items-center gap-5">
@@ -1370,9 +1382,9 @@ export default function Home() {
                   setActivePolicy('refund');
                   scrollToSection('policies');
                 }}
-                className="hover:text-white transition"
+                className="hover:text-teal-700 transition"
               >
-                Refund & Cancellation
+                Refund &amp; Cancellation
               </button>
               <button
                 type="button"
@@ -1380,7 +1392,7 @@ export default function Home() {
                   setActivePolicy('privacy');
                   scrollToSection('policies');
                 }}
-                className="hover:text-white transition"
+                className="hover:text-teal-700 transition"
               >
                 Privacy Policy
               </button>
@@ -1390,11 +1402,11 @@ export default function Home() {
                   setActivePolicy('terms');
                   scrollToSection('policies');
                 }}
-                className="hover:text-white transition"
+                className="hover:text-teal-700 transition"
               >
-                Terms & Conditions
+                Terms &amp; Conditions
               </button>
-              <a href={`mailto:${supportEmail}`} className="hover:text-white transition">
+              <a href={`mailto:${supportEmail}`} className="hover:text-teal-700 transition">
                 {supportEmail}
               </a>
             </div>
@@ -1405,20 +1417,20 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
+    <main className="min-h-screen bg-slate-50 text-slate-900 p-5 md:p-8">
       {isExpired && (
-        <div className="bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-lg animate-pulse flex flex-col md:flex-row justify-between items-center gap-3">
+        <div className="max-w-6xl mx-auto bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
           <span>⚠️ Your Free Trial / Subscription Plan has Ended. Please renew to unlock full features!</span>
           <div className="flex gap-2">
             <button
               onClick={() => handleRenewPlan('monthly')}
-              className="bg-white text-red-600 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition"
+              className="bg-white text-red-700 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition"
             >
               Monthly (₹499)
             </button>
             <button
               onClick={() => handleRenewPlan('yearly')}
-              className="bg-slate-950 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-900 transition border border-white/20"
+              className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-800 transition"
             >
               Yearly (₹1999)
             </button>
@@ -1426,65 +1438,65 @@ export default function Home() {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto space-y-10">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-6 gap-4">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <header className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center text-slate-950 justify-center font-black text-xl">
+            <div className="w-13 h-13 rounded-2xl bg-teal-600 flex items-center text-white justify-center font-black text-xl shadow-sm">
               {providerName ? providerName.charAt(0).toUpperCase() : 'V'}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl md:text-3xl font-extrabold text-white">{providerName}</h1>
-                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold uppercase text-cyan-300">
+                <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">{providerName}</h1>
+                <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-bold uppercase text-teal-700">
                   {userRole}
                 </span>
               </div>
-              <p className="text-slate-400 text-xs md:text-sm">
-                Logged in: <span className="text-cyan-400">{userEmail}</span>
+              <p className="text-slate-500 text-xs md:text-sm mt-0.5">
+                Logged in: <span className="text-teal-700 font-medium">{userEmail}</span>
                 {shopPhone ? ` • 📞 ${shopPhone}` : ''}
                 {shopAddress ? ` • 📍 ${shopAddress}` : ''}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
-              <p className="text-sky-400 font-bold">👥 Total Customers</p>
-              <p className="text-white font-extrabold text-base">{uniqueCustomersCount}</p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm">
+              <p className="text-sky-700 font-bold">👥 Customers</p>
+              <p className="text-slate-900 font-extrabold text-base">{uniqueCustomersCount}</p>
             </div>
 
             {canViewRevenue && (
               <>
-                <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
-                  <p className="text-amber-400 font-bold">⏳ Pending Amount</p>
-                  <p className="text-white font-extrabold text-base">₹{pendingAmount}</p>
+                <div className="bg-amber-50/70 border border-amber-200 px-3.5 py-2 rounded-xl text-xs md:text-sm">
+                  <p className="text-amber-800 font-bold">⏳ Pending Due</p>
+                  <p className="text-slate-900 font-extrabold text-base">₹{pendingAmount}</p>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
-                  <p className="text-emerald-400 font-bold">💰 Total Revenue</p>
-                  <p className="text-white font-extrabold text-base">₹{totalRevenue}</p>
+                <div className="bg-emerald-50/70 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs md:text-sm">
+                  <p className="text-emerald-800 font-bold">💰 Revenue</p>
+                  <p className="text-slate-900 font-extrabold text-base">₹{totalRevenue}</p>
                 </div>
               </>
             )}
 
-            <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm flex items-center gap-3">
+            <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm flex items-center gap-2.5">
               <div>
-                <p className={isExpired ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
-                  {isExpired ? '❌ Trial/Plan Ended' : '💎 Active Plan: Pro'}
+                <p className={isExpired ? 'text-red-700 font-bold' : 'text-emerald-700 font-bold'}>
+                  {isExpired ? '❌ Plan Ended' : '💎 Pro Active'}
                 </p>
-                <p className="text-slate-400 text-[10px]">Expires: {subscriptionExpiry}</p>
+                <p className="text-slate-500 text-[10px]">Exp: {subscriptionExpiry}</p>
               </div>
               <div className="flex gap-1">
                 <button
                   onClick={() => handleRenewPlan('monthly')}
-                  className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-cyan-500/20 transition"
+                  className="bg-teal-50 text-teal-800 border border-teal-200 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition"
                   title="Monthly ₹499"
                 >
                   ₹499
                 </button>
                 <button
                   onClick={() => handleRenewPlan('yearly')}
-                  className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-emerald-500/20 transition"
+                  className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition"
                   title="Yearly ₹1999"
                 >
                   ₹1999
@@ -1492,37 +1504,27 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium flex items-center gap-3">
-              <span>
-                Pending: <strong className="text-amber-400">{pendingCount}</strong>
-              </span>
-              <span className="text-slate-700">|</span>
-              <span>
-                Due Today: <strong className="text-rose-400">{dueTodayCount}</strong>
-              </span>
-            </div>
-
             <button
               onClick={handleLogout}
-              className="bg-red-500/10 text-red-400 border border-red-500/20 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-red-500/20 transition"
+              className="bg-red-50 text-red-700 border border-red-200 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-red-100 transition"
             >
               Logout
             </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-1">
-            <h2 className="text-lg font-semibold text-cyan-400 mb-4">New Booking &amp; Job Card</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm lg:col-span-1">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">New Booking</h2>
             {!canCreateBooking ? (
-              <p className="text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-4">
                 Technician role has view &amp; status update access only.
               </p>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+              <form onSubmit={handleSubmit} className="space-y-3.5" autoComplete="off">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    1. Phone Number (Auto-Checks History)
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                    Phone Number (Auto-Checks History)
                   </label>
                   <input
                     type="tel"
@@ -1532,17 +1534,17 @@ export default function Home() {
                     onChange={(e) => handlePhoneChange(e.target.value)}
                     placeholder="Enter 10-digit mobile"
                     autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                   />
                   {customerPastVisits > 0 && (
-                    <p className="text-emerald-400 text-[11px] mt-1 font-medium">
-                      ✨ Returning Customer! Past Services: {customerPastVisits}
+                    <p className="text-emerald-700 text-[11px] mt-1 font-semibold">
+                      ✨ Returning Customer! Past Visits: {customerPastVisits}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                     Customer Name
                   </label>
                   <input
@@ -1552,12 +1554,12 @@ export default function Home() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Enter full name"
                     autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                     Machine / Appliance Info
                   </label>
                   <input
@@ -1566,18 +1568,18 @@ export default function Home() {
                     onChange={(e) => setApplianceInfo(e.target.value)}
                     placeholder="e.g. Split AC 1.5 Ton, Kent RO"
                     autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    2. Service Type
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                    Service Type
                   </label>
                   <select
                     value={service}
                     onChange={(e) => setService(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                   >
                     <option value="AC Repair & Service">AC Repair &amp; Service</option>
                     <option value="RO Service & AMC">RO Service &amp; AMC</option>
@@ -1588,171 +1590,188 @@ export default function Home() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Complaint / Job Card Issue
-                  </label>
-                  <input
-                    type="text"
-                    value={complaintIssue}
-                    onChange={(e) => setComplaintIssue(e.target.value)}
-                    placeholder="e.g. Low cooling, water leakage, filter change"
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    3. Assign Technician
-                  </label>
-                  <input
-                    type="text"
-                    list="technician-suggestions"
-                    value={assignedTechnician}
-                    onChange={(e) => setAssignedTechnician(e.target.value)}
-                    placeholder="Technician name or email"
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                  <datalist id="technician-suggestions">
-                    {technicianOptions.map((tech) => (
-                      <option key={tech} value={tech} />
-                    ))}
-                  </datalist>
-                </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                      4. Parts Cost (₹)
+                    <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                      Service Price (₹)
                     </label>
                     <input
                       type="number"
-                      min="0"
-                      value={partsCost}
-                      onChange={(e) => setPartsCost(e.target.value)}
-                      placeholder="0"
+                      required
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder={
+                        Number(partsCost) || Number(labourCost)
+                          ? `₹${(Number(partsCost) || 0) + (Number(labourCost) || 0)}`
+                          : 'Amount in ₹'
+                      }
                       autoComplete="off"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-cyan-500"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                      Labour Charge (₹)
+                    <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                      Payment Mode
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={labourCost}
-                      onChange={(e) => setLabourCost(e.target.value)}
-                      placeholder="0"
-                      autoComplete="off"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:border-cyan-500"
-                    />
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(normalizePaymentMethod(e.target.value))}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
+                    >
+                      <option value="Due">Due (Baaki)</option>
+                      <option value="Cash">Cash</option>
+                      <option value="UPI">UPI</option>
+                    </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    5. Total Service Price (₹)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder={
-                      Number(partsCost) || Number(labourCost)
-                        ? `Auto total: ₹${(Number(partsCost) || 0) + (Number(labourCost) || 0)}`
-                        : 'Enter total amount in ₹'
-                    }
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Payment Mode
-                  </label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(normalizePaymentMethod(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  >
-                    <option value="Due">Due (Baaki / Pending)</option>
-                    <option value="Cash">Cash</option>
-                    <option value="UPI">UPI</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Payment / Pending Note (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={paymentNote}
-                    onChange={(e) => setPaymentNote(e.target.value)}
-                    placeholder="e.g. ₹200 due tomorrow, Paid via GPay"
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Parts / Items Used (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={partsUsed}
-                    onChange={(e) => setPartsUsed(e.target.value)}
-                    placeholder="e.g. RO Membrane, Filter, Gas Refill"
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    6. AMC / Warranty Expiry (Optional)
-                  </label>
-                  <input
-                    type="date"
-                    value={amcExpiryDate}
-                    onChange={(e) => setAmcExpiryDate(e.target.value)}
-                    autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                    Next Service Reminder Date
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
+                    Next Service Date
                   </label>
                   <input
                     type="date"
                     value={nextServiceDate}
                     onChange={(e) => setNextServiceDate(e.target.value)}
                     autoComplete="off"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                   />
                 </div>
 
                 <button
+                  type="button"
+                  onClick={() => setShowExtraBookingFields((prev) => !prev)}
+                  className="w-full flex items-center justify-between bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-4 py-2.5 rounded-xl border border-slate-200 transition"
+                >
+                  <span>
+                    {showExtraBookingFields
+                      ? '▲ Hide Job, Parts & AMC Details'
+                      : '▼ More: Complaint, Technician, Parts & AMC'}
+                  </span>
+                </button>
+
+                {showExtraBookingFields && (
+                  <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Complaint / Job Card Issue
+                      </label>
+                      <input
+                        type="text"
+                        value={complaintIssue}
+                        onChange={(e) => setComplaintIssue(e.target.value)}
+                        placeholder="e.g. Low cooling, water leakage"
+                        autoComplete="off"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Assign Technician
+                      </label>
+                      <input
+                        type="text"
+                        list="technician-suggestions"
+                        value={assignedTechnician}
+                        onChange={(e) => setAssignedTechnician(e.target.value)}
+                        placeholder="Technician name or email"
+                        autoComplete="off"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                      />
+                      <datalist id="technician-suggestions">
+                        {technicianOptions.map((tech) => (
+                          <option key={tech} value={tech} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                          Parts Cost (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={partsCost}
+                          onChange={(e) => setPartsCost(e.target.value)}
+                          placeholder="0"
+                          autoComplete="off"
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                          Labour Charge (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={labourCost}
+                          onChange={(e) => setLabourCost(e.target.value)}
+                          placeholder="0"
+                          autoComplete="off"
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Parts / Items Used
+                      </label>
+                      <input
+                        type="text"
+                        value={partsUsed}
+                        onChange={(e) => setPartsUsed(e.target.value)}
+                        placeholder="e.g. RO Membrane, Filter, Gas Refill"
+                        autoComplete="off"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        AMC / Warranty Expiry Date
+                      </label>
+                      <input
+                        type="date"
+                        value={amcExpiryDate}
+                        onChange={(e) => setAmcExpiryDate(e.target.value)}
+                        autoComplete="off"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                        Payment / Pending Note
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentNote}
+                        onChange={(e) => setPaymentNote(e.target.value)}
+                        placeholder="e.g. ₹200 due tomorrow, Paid via GPay"
+                        autoComplete="off"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <button
                   type="submit"
                   disabled={loading || isExpired}
-                  className="w-full bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50"
                 >
-                  {loading ? 'Saving...' : 'Confirm & Save Job Card'}
+                  {loading ? 'Saving...' : 'Confirm & Save Booking'}
                 </button>
               </form>
             )}
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-5">
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm lg:col-span-2 space-y-5">
             <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="text"
@@ -1760,14 +1779,14 @@ export default function Home() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="🔍 Search by name, phone, machine, complaint, technician or parts..."
                 autoComplete="off"
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
+                className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
               />
 
               {technicianOptions.length > 0 && (
                 <select
                   value={technicianFilter}
                   onChange={(e) => setTechnicianFilter(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-3 text-xs font-semibold text-slate-200 focus:border-cyan-500"
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-xs font-semibold text-slate-800 focus:border-teal-600 outline-none"
                 >
                   <option value="all">All Technicians</option>
                   {technicianOptions.map((tech) => (
@@ -1782,7 +1801,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 px-4 py-3 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                  className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-4 py-3 rounded-xl text-xs font-bold whitespace-nowrap transition"
                 >
                   ⬇️ Export CSV ({filteredBookings.length})
                 </button>
@@ -1795,8 +1814,8 @@ export default function Home() {
                 onClick={() => setStatusFilter('all')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'all'
-                    ? 'bg-cyan-500 text-slate-950'
-                    : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
                 }`}
               >
                 All ({bookings.length})
@@ -1806,79 +1825,79 @@ export default function Home() {
                 onClick={() => setStatusFilter('Pending')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'Pending'
-                    ? 'bg-amber-400 text-slate-950'
-                    : 'bg-slate-950 text-amber-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
                 }`}
               >
-                Pending ({pendingCount})
+                ⏳ Pending ({pendingCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('Completed')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'Completed'
-                    ? 'bg-emerald-400 text-slate-950'
-                    : 'bg-slate-950 text-emerald-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                 }`}
               >
-                Completed ({completedCount})
+                ✅ Completed ({completedCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('DueToday')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'DueToday'
-                    ? 'bg-rose-400 text-slate-950'
-                    : 'bg-slate-950 text-rose-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
                 }`}
               >
-                Due Today ({dueTodayCount})
+                🔴 Due Today ({dueTodayCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('DueSoon')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'DueSoon'
-                    ? 'bg-sky-400 text-slate-950'
-                    : 'bg-slate-950 text-sky-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100'
                 }`}
               >
-                Due Soon ({dueSoonCount})
+                🔵 Due Soon ({dueSoonCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('Overdue')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'Overdue'
-                    ? 'bg-red-400 text-slate-950'
-                    : 'bg-slate-950 text-red-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'bg-red-50 text-red-800 border border-red-200 hover:bg-red-100'
                 }`}
               >
-                Overdue ({overdueCount})
+                ⚠️ Overdue ({overdueCount})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('AmcExpiring')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'AmcExpiring'
-                    ? 'bg-purple-400 text-slate-950'
-                    : 'bg-slate-950 text-purple-300 border border-slate-800 hover:bg-slate-800'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100'
                 }`}
               >
-                AMC Expiring ({amcExpiringCount})
+                🛡️ AMC Expiring ({amcExpiringCount})
               </button>
             </div>
 
             {selectedHistoryPhone && (
-              <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-4 space-y-2.5">
+              <div className="bg-teal-50/70 border border-teal-200 rounded-xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-cyan-300">
+                  <p className="text-xs font-bold text-teal-900">
                     📜 Service History — {selectedHistoryPhone} ({selectedHistoryRecords.length} visits)
                   </p>
                   <button
                     type="button"
                     onClick={() => setSelectedHistoryPhone(null)}
-                    className="text-xs text-slate-400 hover:text-white"
+                    className="text-xs font-semibold text-slate-600 hover:text-slate-900"
                   >
                     Close ✕
                   </button>
@@ -1887,13 +1906,13 @@ export default function Home() {
                   {selectedHistoryRecords.map((rec, i) => (
                     <div
                       key={rec.id || i}
-                      className="text-xs bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 flex flex-wrap justify-between gap-2"
+                      className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 flex flex-wrap justify-between gap-2"
                     >
-                      <span className="text-white font-semibold">
+                      <span className="text-slate-900 font-semibold">
                         {rec.service}
                         {rec.appliance_info ? ` (${rec.appliance_info})` : ''}
                       </span>
-                      <span className="text-slate-400">
+                      <span className="text-slate-600">
                         {rec.status || 'Pending'}
                         {canViewRevenue ? ` • ₹${rec.price || 0}` : ''}
                         {rec.next_service_date ? ` • Next: ${rec.next_service_date}` : ''}
@@ -1904,7 +1923,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">Koi matching booking nahi mili.</p>
               ) : (
@@ -1918,22 +1937,23 @@ export default function Home() {
                   const totalCustomerVisits = phoneKey
                     ? bookings.filter((b) => String(b.phone || '').trim() === phoneKey).length
                     : 1;
+                  const isCompleted = item.status === 'Completed';
 
                   if (isEditing) {
                     return (
                       <form
                         key={item.id || index}
                         onSubmit={(e) => handleSaveBookingEdit(e, item.id)}
-                        className="bg-slate-950 border border-cyan-500/40 p-4 rounded-xl space-y-3"
+                        className="bg-slate-50 border-2 border-teal-500 p-4 rounded-xl space-y-3"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase text-cyan-400">
-                            Edit Job Card #{item.id}
+                          <span className="text-xs font-bold uppercase text-teal-800">
+                            Edit Booking #{item.id}
                           </span>
                           <button
                             type="button"
                             onClick={cancelEditingBooking}
-                            className="text-xs text-slate-400 hover:text-white"
+                            className="text-xs font-semibold text-slate-600 hover:text-slate-900"
                           >
                             Cancel
                           </button>
@@ -1946,7 +1966,7 @@ export default function Home() {
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             placeholder="Customer Name"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="tel"
@@ -1955,19 +1975,19 @@ export default function Home() {
                             value={editPhone}
                             onChange={(e) => setEditPhone(e.target.value)}
                             placeholder="10-digit Phone"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="text"
                             value={editApplianceInfo}
                             onChange={(e) => setEditApplianceInfo(e.target.value)}
                             placeholder="Machine / Appliance Info"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <select
                             value={editService}
                             onChange={(e) => setEditService(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           >
                             <option value="AC Repair & Service">AC Repair &amp; Service</option>
                             <option value="RO Service & AMC">RO Service &amp; AMC</option>
@@ -1981,14 +2001,14 @@ export default function Home() {
                             value={editComplaintIssue}
                             onChange={(e) => setEditComplaintIssue(e.target.value)}
                             placeholder="Complaint / Job Card Issue"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="text"
                             value={editAssignedTechnician}
                             onChange={(e) => setEditAssignedTechnician(e.target.value)}
                             placeholder="Assigned Technician"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="number"
@@ -1996,7 +2016,7 @@ export default function Home() {
                             value={editPartsCost}
                             onChange={(e) => setEditPartsCost(e.target.value)}
                             placeholder="Parts Cost (₹)"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="number"
@@ -2004,7 +2024,7 @@ export default function Home() {
                             value={editLabourCost}
                             onChange={(e) => setEditLabourCost(e.target.value)}
                             placeholder="Labour Charge (₹)"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="number"
@@ -2012,12 +2032,12 @@ export default function Home() {
                             value={editPrice}
                             onChange={(e) => setEditPrice(e.target.value)}
                             placeholder="Total Amount (₹)"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <select
                             value={editPaymentMethod}
                             onChange={(e) => setEditPaymentMethod(normalizePaymentMethod(e.target.value))}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           >
                             <option value="Due">Due (Baaki / Pending)</option>
                             <option value="Cash">Cash</option>
@@ -2028,25 +2048,25 @@ export default function Home() {
                             value={editPaymentNote}
                             onChange={(e) => setEditPaymentNote(e.target.value)}
                             placeholder="Payment / Pending Note"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="text"
                             value={editPartsUsed}
                             onChange={(e) => setEditPartsUsed(e.target.value)}
                             placeholder="Parts / Items Used"
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <input
                             type="date"
                             value={editAmcExpiryDate}
                             onChange={(e) => setEditAmcExpiryDate(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                           <select
                             value={editStatus}
                             onChange={(e) => setEditStatus(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           >
                             <option value="Pending">Pending</option>
                             <option value="Completed">Completed</option>
@@ -2055,7 +2075,7 @@ export default function Home() {
                             type="date"
                             value={editNextServiceDate}
                             onChange={(e) => setEditNextServiceDate(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                            className="bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
                           />
                         </div>
 
@@ -2063,14 +2083,14 @@ export default function Home() {
                           <button
                             type="button"
                             onClick={cancelEditingBooking}
-                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700"
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-200 text-slate-800 hover:bg-slate-300"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={savingEdit}
-                            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
+                            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
                           >
                             {savingEdit ? 'Saving...' : 'Save Changes'}
                           </button>
@@ -2082,11 +2102,11 @@ export default function Home() {
                   return (
                     <div
                       key={item.id || index}
-                      className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+                      className="bg-white border border-slate-200 hover:border-slate-300 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs"
                     >
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-bold text-white text-base">{item.name}</h3>
+                          <h3 className="font-bold text-slate-900 text-base">{item.name}</h3>
                           {item.id && (
                             <span className="text-[11px] font-semibold text-slate-500">
                               #{item.id}
@@ -2099,58 +2119,61 @@ export default function Home() {
                           )}
                           {item.amc_expiry_date && (
                             <span
-                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                                 amcAlert
-                                  ? 'bg-purple-500/25 text-purple-200 border-purple-400/50'
-                                  : 'bg-purple-500/15 text-purple-200 border-purple-500/30'
+                                  ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                  : 'bg-purple-50 text-purple-700 border-purple-200'
                               }`}
                             >
-                              AMC: {item.amc_expiry_date}
+                              🛡️ AMC: {item.amc_expiry_date}
                               {amcAlert ? ' (Expiring)' : ''}
                             </span>
                           )}
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               payMode === 'Cash'
-                                ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                                 : payMode === 'UPI'
-                                ? 'bg-sky-500/15 text-sky-200 border border-sky-500/30'
-                                : 'bg-amber-500/15 text-amber-200 border border-amber-500/30'
+                                ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
                             }`}
                           >
-                            {payMode}
+                            💳 {payMode}
                           </span>
                         </div>
-                        <p className="text-slate-400 text-xs">
+
+                        <p className="text-slate-600 text-xs">
                           📞 {item.phone}
-                          {item.appliance_info ? ` | 🖥️ ${item.appliance_info}` : ''}
-                          {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
-                          {item.next_service_date ? ` | 📅 ${item.next_service_date}` : ''}
+                          {item.appliance_info ? ` • 🖥️ ${item.appliance_info}` : ''}
+                          {canViewRevenue ? ` • 💵 ₹${item.price || 0}` : ''}
                         </p>
+
                         {(item.complaint_issue || item.assigned_technician) && (
-                          <p className="text-slate-300 text-xs">
-                            {item.complaint_issue ? `🔧 Issue: ${item.complaint_issue}` : ''}
+                          <p className="text-slate-700 text-xs">
+                            {item.complaint_issue ? `🔧 ${item.complaint_issue}` : ''}
                             {item.complaint_issue && item.assigned_technician ? ' • ' : ''}
-                            {item.assigned_technician ? `👷 Tech: ${item.assigned_technician}` : ''}
+                            {item.assigned_technician ? `👷 ${item.assigned_technician}` : ''}
                           </p>
                         )}
+
                         {item.parts_used && (
-                          <p className="text-cyan-300/90 text-xs">
+                          <p className="text-teal-800 text-xs font-medium">
                             🛠️ Parts: {item.parts_used}
                             {canViewRevenue && (Number(item.parts_cost) > 0 || Number(item.labour_cost) > 0)
                               ? ` (Parts ₹${Number(item.parts_cost) || 0} + Labour ₹${Number(item.labour_cost) || 0})`
                               : ''}
                           </p>
                         )}
+
                         {item.payment_note && (
-                          <p className="text-amber-300/90 text-xs">
+                          <p className="text-amber-800 text-xs font-medium">
                             📝 Note: {item.payment_note}
                           </p>
                         )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full text-xs font-semibold">
+                        <span className="bg-teal-50 text-teal-800 border border-teal-200 px-3 py-1 rounded-full text-xs font-semibold">
                           {item.service}
                         </span>
 
@@ -2160,7 +2183,7 @@ export default function Home() {
                             onClick={() =>
                               setSelectedHistoryPhone(selectedHistoryPhone === phoneKey ? null : phoneKey)
                             }
-                            className="bg-slate-800 text-cyan-300 border border-cyan-500/30 hover:bg-slate-700 px-2.5 py-1 rounded-full text-xs font-semibold transition"
+                            className="bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 px-2.5 py-1 rounded-full text-xs font-semibold transition"
                           >
                             📜 {totalCustomerVisits} Visits
                           </button>
@@ -2169,7 +2192,7 @@ export default function Home() {
                         {callHref && (
                           <a
                             href={callHref}
-                            className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 px-3 py-1 rounded-full text-xs font-bold transition"
+                            className="bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100 px-3 py-1 rounded-full text-xs font-bold transition"
                           >
                             📞 Call
                           </a>
@@ -2178,19 +2201,19 @@ export default function Home() {
                         <button
                           onClick={() => toggleStatus(item.id, item.status)}
                           className={`px-3 py-1 rounded-full text-xs font-bold transition ${
-                            item.status === 'Completed'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            isCompleted
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
                           }`}
                         >
-                          {item.status || 'Pending'}
+                          {isCompleted ? '✅ Completed' : '⏳ Pending'}
                         </button>
 
                         {canBillingAndShare && (
                           <>
                             <button
                               onClick={() => handlePrintInvoice(item)}
-                              className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full text-xs font-bold"
+                              className="bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 px-3 py-1 rounded-full text-xs font-bold transition"
                             >
                               📄 Bill
                             </button>
@@ -2199,9 +2222,9 @@ export default function Home() {
                               href={buildWhatsAppUrl(item)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
+                              className="bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition"
                             >
-                              💬 WhatsApp &amp; Review
+                              💬 WhatsApp
                             </a>
                           </>
                         )}
@@ -2211,7 +2234,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => startEditingBooking(item)}
-                              className="bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 px-2.5 py-1 rounded-full text-xs font-semibold transition"
+                              className="bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200 px-2.5 py-1 rounded-full text-xs font-semibold transition"
                             >
                               ✏️ Edit
                             </button>
@@ -2219,7 +2242,7 @@ export default function Home() {
                               type="button"
                               disabled={deletingBookingId === item.id}
                               onClick={() => handleDeleteBooking(item.id, item.name)}
-                              className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-2.5 py-1 rounded-full text-xs font-semibold transition disabled:opacity-50"
+                              className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 px-2.5 py-1 rounded-full text-xs font-semibold transition disabled:opacity-50"
                             >
                               {deletingBookingId === item.id ? 'Deleting...' : '🗑️ Delete'}
                             </button>
@@ -2235,11 +2258,11 @@ export default function Home() {
         </div>
 
         {canManageShopSettings && (
-          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+          <section className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-4">
               <div>
-                <h2 className="text-lg font-bold text-white">Shop Settings</h2>
-                <p className="text-xs text-slate-400">
+                <h2 className="text-lg font-bold text-slate-900">Shop Settings</h2>
+                <p className="text-xs text-slate-500">
                   Update your shop name, phone number, and address shown on dashboard header and printed invoices.
                 </p>
               </div>
@@ -2247,7 +2270,7 @@ export default function Home() {
 
             <form onSubmit={handleSaveShopSettings} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                   Shop Name
                 </label>
                 <input
@@ -2256,12 +2279,12 @@ export default function Home() {
                   value={providerName}
                   onChange={(e) => setProviderName(e.target.value)}
                   placeholder="Enter shop name"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                   Shop Phone
                 </label>
                 <input
@@ -2269,12 +2292,12 @@ export default function Home() {
                   value={shopPhone}
                   onChange={(e) => setShopPhone(e.target.value)}
                   placeholder="Enter shop phone number"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                <label className="block text-xs font-bold uppercase text-slate-600 mb-1">
                   Shop Address
                 </label>
                 <input
@@ -2282,7 +2305,7 @@ export default function Home() {
                   value={shopAddress}
                   onChange={(e) => setShopAddress(e.target.value)}
                   placeholder="Enter shop address"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
                 />
               </div>
 
@@ -2290,7 +2313,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={savingShopSettings}
-                  className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-5 py-2 text-xs transition disabled:opacity-50"
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl px-5 py-2 text-xs transition disabled:opacity-50"
                 >
                   {savingShopSettings ? 'Saving...' : 'Save Shop Settings'}
                 </button>
@@ -2300,15 +2323,15 @@ export default function Home() {
         )}
 
         {canManageRoles && (
-          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+          <section className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-4">
               <div>
-                <h2 className="text-lg font-bold text-white">Staff &amp; Roles Management</h2>
-                <p className="text-xs text-slate-400">
+                <h2 className="text-lg font-bold text-slate-900">Staff &amp; Roles Management</h2>
+                <p className="text-xs text-slate-500">
                   Staff must sign up once first, then enter their email here to link to your shop and assign a role.
                 </p>
               </div>
-              <span className="text-xs text-cyan-400 font-semibold">
+              <span className="text-xs text-teal-700 font-bold">
                 Accounts: {staffProfiles.length}
               </span>
             </div>
@@ -2320,12 +2343,12 @@ export default function Home() {
                 value={staffEmailInput}
                 onChange={(e) => setStaffEmailInput(e.target.value)}
                 placeholder="Staff email (already signed up)"
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
               />
               <select
                 value={staffRoleInput}
                 onChange={(e) => setStaffRoleInput(e.target.value as StaffAssignableRole)}
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-cyan-500 outline-none"
+                className="bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:border-teal-600 focus:bg-white outline-none"
               >
                 <option value="technician">technician</option>
                 <option value="receptionist">receptionist</option>
@@ -2334,7 +2357,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={assigningStaff}
-                className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl px-4 py-2 text-xs transition disabled:opacity-50"
+                className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl px-4 py-2 text-xs transition disabled:opacity-50"
               >
                 {assigningStaff ? 'Assigning...' : '+ Assign Staff Role'}
               </button>
@@ -2350,24 +2373,24 @@ export default function Home() {
                   return (
                     <div
                       key={rowKey}
-                      className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div>
-                        <p className="text-sm font-bold text-white">
+                        <p className="text-sm font-bold text-slate-900">
                           {prof.provider_name || 'Service Shop'}
                         </p>
-                        <p className="text-xs text-slate-400">{prof.email || 'No email'}</p>
+                        <p className="text-xs text-slate-500">{prof.email || 'No email'}</p>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-bold uppercase text-cyan-300">
+                        <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-bold uppercase text-teal-800">
                           {currentRole}
                         </span>
                         <select
                           value={currentRole === 'owner' || currentRole === 'super_admin' ? 'manager' : currentRole}
                           disabled={roleSavingId === rowKey || currentRole === 'owner' || currentRole === 'super_admin'}
                           onChange={(e) => handleRoleChange(prof, e.target.value as StaffAssignableRole)}
-                          className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none disabled:opacity-60"
+                          className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:border-teal-600 outline-none disabled:opacity-60"
                         >
                           <option value="manager">manager</option>
                           <option value="receptionist">receptionist</option>
