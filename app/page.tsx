@@ -44,6 +44,7 @@ export default function Home() {
   const [selectedHistoryPhone, setSelectedHistoryPhone] = useState<string | null>(null);
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
   const [isExpired, setIsExpired] = useState(false);
+  const [testingOneRupee, setTestingOneRupee] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState<any[]>([]);
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
@@ -414,6 +415,54 @@ export default function Home() {
     setUserRole('owner');
     setStaffProfiles([]);
     router.push('/login');
+  };
+
+  // अस्थायी ₹1 लाइव टेस्ट (टेस्ट सफल होने के बाद इसे हटा दें)
+  const handleOneRupeeTest = () => {
+    if (!window.Razorpay) {
+      alert('Razorpay SDK failed to load. Please check your internet connection.');
+      return;
+    }
+
+    const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    if (!razorpayKey) {
+      alert('NEXT_PUBLIC_RAZORPAY_KEY_ID is not configured.');
+      return;
+    }
+
+    setTestingOneRupee(true);
+    const options = {
+      key: razorpayKey,
+      amount: 100, // ₹1 = 100 paise
+      currency: 'INR',
+      name: providerName || 'ServiceMitra Pro',
+      description: '₹1 Live Webhook Test',
+      notes: {
+        planType: 'test_1_rupee',
+        userId: workspaceOwnerId || userId,
+        userEmail,
+      },
+      handler: function (response: any) {
+        setTestingOneRupee(false);
+        alert(
+          `₹1 Payment submitted (${response?.razorpay_payment_id || 'Done'}). Now check Razorpay Payments & Webhook logs and refresh the page!`
+        );
+      },
+      modal: {
+        ondismiss: function () {
+          setTestingOneRupee(false);
+        },
+      },
+      prefill: {
+        email: userEmail,
+      },
+      theme: {
+        color: '#f59e0b',
+      },
+    };
+
+    const paymentObject = new window.Razorpay(options);
+    paymentObject.open();
   };
 
   const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
@@ -1423,6 +1472,13 @@ export default function Home() {
           <span>⚠️ Your Free Trial / Subscription Plan has Ended. Please renew to unlock full features!</span>
           <div className="flex gap-2">
             <button
+              onClick={handleOneRupeeTest}
+              disabled={testingOneRupee}
+              className="bg-amber-300 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-amber-200 transition disabled:opacity-50"
+            >
+              {testingOneRupee ? 'Testing...' : '₹1 Test'}
+            </button>
+            <button
               onClick={() => handleRenewPlan('monthly')}
               className="bg-white text-red-700 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition"
             >
@@ -1487,6 +1543,15 @@ export default function Home() {
                 <p className="text-slate-500 text-[10px]">Exp: {subscriptionExpiry}</p>
               </div>
               <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={handleOneRupeeTest}
+                  disabled={testingOneRupee}
+                  className="bg-amber-50 text-amber-900 border border-amber-300 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-amber-100 transition disabled:opacity-50"
+                  title="Temporary ₹1 Webhook Test"
+                >
+                  {testingOneRupee ? '...' : '₹1 Test'}
+                </button>
                 <button
                   onClick={() => handleRenewPlan('monthly')}
                   className="bg-teal-50 text-teal-800 border border-teal-200 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition"
