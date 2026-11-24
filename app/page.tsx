@@ -9,7 +9,7 @@ declare const window: any;
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
-type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueSoon' | 'Overdue';
+type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueToday' | 'DueSoon' | 'Overdue';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -77,6 +77,7 @@ export default function Home() {
       return {
         label: `Overdue (${Math.abs(diffDays)}d)`,
         className: 'bg-red-500/15 text-red-300 border border-red-500/30',
+        isDueToday: false,
         isDueSoon: false,
         isOverdue: true,
       };
@@ -85,6 +86,7 @@ export default function Home() {
       return {
         label: 'Due Today',
         className: 'bg-rose-500/20 text-rose-200 border border-rose-500/40',
+        isDueToday: true,
         isDueSoon: true,
         isOverdue: false,
       };
@@ -93,6 +95,7 @@ export default function Home() {
       return {
         label: `Due in ${diffDays}d`,
         className: 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30',
+        isDueToday: false,
         isDueSoon: true,
         isOverdue: false,
       };
@@ -100,6 +103,7 @@ export default function Home() {
     return {
       label: `Next: ${dateStr}`,
       className: 'bg-slate-800 text-slate-300 border border-slate-700',
+      isDueToday: false,
       isDueSoon: false,
       isOverdue: false,
     };
@@ -661,6 +665,35 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const buildWhatsAppUrl = (item: any) => {
+    const cleanPhone = String(item.phone || '').replace(/\D/g, '');
+    const waNumber = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const dueBadge = getDueBadge(item.next_service_date);
+    const amountVal = Number(item.price) || 0;
+
+    const lines = [
+      `Hello ${item.name}, thank you for choosing ${providerName}!`,
+      `Service: ${item.service}`,
+      `Bill Amount: ₹${amountVal} (${item.status || 'Pending'})`,
+    ];
+
+    if (item.next_service_date) {
+      lines.push(
+        dueBadge?.isDueToday
+          ? `Reminder: Your next service is DUE TODAY (${item.next_service_date}).`
+          : `Next Service Date: ${item.next_service_date}`
+      );
+    }
+
+    if (shopPhone) {
+      lines.push(`Shop Contact: ${shopPhone}`);
+    }
+
+    lines.push('Please rate our service out of 5 stars! ⭐️');
+
+    return `https://wa.me/${waNumber}?text=${encodeURIComponent(lines.join('\n'))}`;
+  };
+
   const handlePrintInvoice = (item: any) => {
     if (!canBillingAndShare) {
       alert('Billing access is restricted for Technician role.');
@@ -675,6 +708,9 @@ export default function Home() {
       });
       const amountVal = Number(item.price) || 0;
       const statusText = item.status || 'Pending';
+      const visitCount = item.phone
+        ? bookings.filter((b) => String(b.phone || '').trim() === String(item.phone).trim()).length
+        : 1;
 
       printWindow.document.write(`
         <html>
@@ -717,6 +753,7 @@ export default function Home() {
                   <div class="box-label">Customer Details</div>
                   <div><strong>Name:</strong> ${item.name}</div>
                   <div style="margin-top: 4px;"><strong>Phone:</strong> ${item.phone}</div>
+                  <div style="margin-top: 4px;"><strong>Total Visits:</strong> ${visitCount}</div>
                 </div>
                 <div class="box-card">
                   <div class="box-label">Service Schedule</div>
@@ -756,8 +793,15 @@ export default function Home() {
     }
   };
 
+  const uniqueCustomersCount = new Set(
+    bookings
+      .map((item) => String(item.phone || '').trim() || String(item.name || '').trim().toLowerCase())
+      .filter(Boolean)
+  ).size;
+
   const pendingCount = bookings.filter((item) => (item.status || 'Pending') === 'Pending').length;
   const completedCount = bookings.filter((item) => item.status === 'Completed').length;
+  const dueTodayCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueToday)).length;
   const dueSoonCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueSoon)).length;
   const overdueCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isOverdue)).length;
 
@@ -765,12 +809,18 @@ export default function Home() {
     .filter((item) => item.status === 'Completed')
     .reduce((sum, item) => sum + (Number(item.price) || 0), 0);
 
+  const pendingAmount = bookings
+    .filter((item) => (item.status || 'Pending') === 'Pending')
+    .reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+
   const filteredBookings = bookings.filter((item) => {
     const currentStatus = item.status || 'Pending';
     const dueBadge = getDueBadge(item.next_service_date);
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'DueSoon'
+      (statusFilter === 'DueToday'
+        ? Boolean(dueBadge?.isDueToday)
+        : statusFilter === 'DueSoon'
         ? Boolean(dueBadge?.isDueSoon)
         : statusFilter === 'Overdue'
         ? Boolean(dueBadge?.isOverdue)
@@ -844,7 +894,7 @@ export default function Home() {
         <section className="mx-auto max-w-6xl px-4 pt-14 pb-12">
           <div className="rounded-3xl border border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 p-8 shadow-2xl md:p-12">
             <p className="inline-block rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-1 text-xs font-semibold text-cyan-300">
-              For AC Repair, Plumbing, Electrical, Carpentry & Home Services
+              For AC Repair, RO Service, Plumbing, Electrical, Carpentry & Home Services
             </p>
             <h1 className="mt-5 max-w-3xl text-3xl font-extrabold leading-tight text-white sm:text-5xl">
               Manage service bookings, customer history, invoices & WhatsApp follow-ups in one place.
@@ -1160,11 +1210,23 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
+              <p className="text-sky-400 font-bold">👥 Total Customers</p>
+              <p className="text-white font-extrabold text-base">{uniqueCustomersCount}</p>
+            </div>
+
             {canViewRevenue && (
-              <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
-                <p className="text-emerald-400 font-bold">💰 Total Revenue</p>
-                <p className="text-white font-extrabold text-base">₹{totalRevenue}</p>
-              </div>
+              <>
+                <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
+                  <p className="text-amber-400 font-bold">⏳ Pending Amount</p>
+                  <p className="text-white font-extrabold text-base">₹{pendingAmount}</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm">
+                  <p className="text-emerald-400 font-bold">💰 Total Revenue</p>
+                  <p className="text-white font-extrabold text-base">₹{totalRevenue}</p>
+                </div>
+              </>
             )}
 
             <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs md:text-sm flex items-center gap-3">
@@ -1198,7 +1260,7 @@ export default function Home() {
               </span>
               <span className="text-slate-700">|</span>
               <span>
-                Due Soon: <strong className="text-cyan-400">{dueSoonCount}</strong>
+                Due Today: <strong className="text-rose-400">{dueTodayCount}</strong>
               </span>
             </div>
 
@@ -1266,6 +1328,7 @@ export default function Home() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
                   >
                     <option value="AC Repair & Service">AC Repair &amp; Service</option>
+                    <option value="RO Service & AMC">RO Service &amp; AMC</option>
                     <option value="Plumbing">Plumbing</option>
                     <option value="Electrical Work">Electrical Work</option>
                     <option value="Carpentry">Carpentry</option>
@@ -1381,6 +1444,17 @@ export default function Home() {
               </button>
               <button
                 type="button"
+                onClick={() => setStatusFilter('DueToday')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'DueToday'
+                    ? 'bg-rose-400 text-slate-950'
+                    : 'bg-slate-950 text-rose-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Due Today ({dueTodayCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => setStatusFilter('DueSoon')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
                   statusFilter === 'DueSoon'
@@ -1455,6 +1529,7 @@ export default function Home() {
                             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
                           >
                             <option value="AC Repair & Service">AC Repair &amp; Service</option>
+                            <option value="RO Service & AMC">RO Service &amp; AMC</option>
                             <option value="Plumbing">Plumbing</option>
                             <option value="Electrical Work">Electrical Work</option>
                             <option value="Carpentry">Carpentry</option>
@@ -1556,17 +1631,7 @@ export default function Home() {
                             </button>
 
                             <a
-                              href={`https://wa.me/91${item.phone}?text=Hello%20${encodeURIComponent(
-                                item.name
-                              )},%20thank%20you%20for%20choosing%20${encodeURIComponent(
-                                providerName
-                              )}!%20Your%20bill%20for%20${encodeURIComponent(item.service)}%20is%20₹${
-                                item.price || 0
-                              }.${
-                                item.next_service_date
-                                  ? `%20Next%20service%20date:%20${encodeURIComponent(item.next_service_date)}.`
-                                  : ''
-                              }%20Please%20rate%20our%20service%20out%20of%205%20stars!⭐️`}
+                              href={buildWhatsAppUrl(item)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
