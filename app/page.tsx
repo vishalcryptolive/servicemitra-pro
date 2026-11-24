@@ -9,7 +9,7 @@ declare const window: any;
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
-type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueSoon';
+type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueSoon' | 'Overdue';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -59,6 +59,7 @@ export default function Home() {
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
   const canEditOrDeleteBooking = userRole !== 'technician';
+  const canExportCsv = userRole !== 'technician';
 
   const getDueBadge = (dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -77,6 +78,7 @@ export default function Home() {
         label: `Overdue (${Math.abs(diffDays)}d)`,
         className: 'bg-red-500/15 text-red-300 border border-red-500/30',
         isDueSoon: false,
+        isOverdue: true,
       };
     }
     if (diffDays === 0) {
@@ -84,6 +86,7 @@ export default function Home() {
         label: 'Due Today',
         className: 'bg-rose-500/20 text-rose-200 border border-rose-500/40',
         isDueSoon: true,
+        isOverdue: false,
       };
     }
     if (diffDays <= 7) {
@@ -91,12 +94,14 @@ export default function Home() {
         label: `Due in ${diffDays}d`,
         className: 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30',
         isDueSoon: true,
+        isOverdue: false,
       };
     }
     return {
       label: `Next: ${dateStr}`,
       className: 'bg-slate-800 text-slate-300 border border-slate-700',
       isDueSoon: false,
+      isOverdue: false,
     };
   };
 
@@ -604,6 +609,58 @@ export default function Home() {
     fetchBookings(workspaceOwnerId || userId);
   };
 
+  const escapeCsvValue = (val: any) => {
+    const str = String(val ?? '');
+    const escaped = str.replace(/"/g, '""');
+    return `"${escaped}"`;
+  };
+
+  const handleExportCsv = () => {
+    if (!canExportCsv) {
+      alert('CSV export is restricted for Technician role.');
+      return;
+    }
+    if (filteredBookings.length === 0) {
+      alert('Export karne ke liye koi booking nahi hai.');
+      return;
+    }
+
+    const headers = canViewRevenue
+      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Price (INR)', 'Status', 'Next Service Date']
+      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Status', 'Next Service Date'];
+
+    const rows = filteredBookings.map((item) => {
+      const baseCols = [
+        escapeCsvValue(item.id ?? ''),
+        escapeCsvValue(item.name ?? ''),
+        escapeCsvValue(item.phone ?? ''),
+        escapeCsvValue(item.service ?? ''),
+      ];
+      if (canViewRevenue) {
+        baseCols.push(escapeCsvValue(Number(item.price) || 0));
+      }
+      baseCols.push(
+        escapeCsvValue(item.status || 'Pending'),
+        escapeCsvValue(item.next_service_date || '')
+      );
+      return baseCols.join(',');
+    });
+
+    const csvContent = [headers.map(escapeCsvValue).join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const safeShop = (providerName || 'bookings').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    link.href = url;
+    link.setAttribute('download', `${safeShop}-${statusFilter.toLowerCase()}-${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handlePrintInvoice = (item: any) => {
     if (!canBillingAndShare) {
       alert('Billing access is restricted for Technician role.');
@@ -702,6 +759,7 @@ export default function Home() {
   const pendingCount = bookings.filter((item) => (item.status || 'Pending') === 'Pending').length;
   const completedCount = bookings.filter((item) => item.status === 'Completed').length;
   const dueSoonCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueSoon)).length;
+  const overdueCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isOverdue)).length;
 
   const totalRevenue = bookings
     .filter((item) => item.status === 'Completed')
@@ -712,7 +770,11 @@ export default function Home() {
     const dueBadge = getDueBadge(item.next_service_date);
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'DueSoon' ? Boolean(dueBadge?.isDueSoon) : currentStatus === statusFilter);
+      (statusFilter === 'DueSoon'
+        ? Boolean(dueBadge?.isDueSoon)
+        : statusFilter === 'Overdue'
+        ? Boolean(dueBadge?.isOverdue)
+        : currentStatus === statusFilter);
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.phone.includes(searchQuery) ||
@@ -1262,14 +1324,26 @@ export default function Home() {
           </div>
 
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl lg:col-span-2 space-y-5">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search by customer name, phone or service..."
-              autoComplete="off"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
-            />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="🔍 Search by customer name, phone or service..."
+                autoComplete="off"
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
+              />
+
+              {canExportCsv && (
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 px-4 py-3 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                >
+                  ⬇️ Export CSV ({filteredBookings.length})
+                </button>
+              )}
+            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1315,6 +1389,17 @@ export default function Home() {
                 }`}
               >
                 Due Soon ({dueSoonCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('Overdue')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'Overdue'
+                    ? 'bg-red-400 text-slate-950'
+                    : 'bg-slate-950 text-red-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Overdue ({overdueCount})
               </button>
             </div>
 
