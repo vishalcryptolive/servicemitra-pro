@@ -16,6 +16,8 @@ export default function Home() {
   const [phone, setPhone] = useState('');
   const [service, setService] = useState('AC Repair & Service');
   const [price, setPrice] = useState('');
+  const [partsUsed, setPartsUsed] = useState('');
+  const [amcExpiryDate, setAmcExpiryDate] = useState('');
   const [nextServiceDate, setNextServiceDate] = useState('');
   const [providerName, setProviderName] = useState('My Service Shop');
   const [shopPhone, setShopPhone] = useState('');
@@ -38,6 +40,8 @@ export default function Home() {
   const [editPhone, setEditPhone] = useState('');
   const [editService, setEditService] = useState('AC Repair & Service');
   const [editPrice, setEditPrice] = useState('');
+  const [editPartsUsed, setEditPartsUsed] = useState('');
+  const [editAmcExpiryDate, setEditAmcExpiryDate] = useState('');
   const [editStatus, setEditStatus] = useState('Pending');
   const [editNextServiceDate, setEditNextServiceDate] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -506,6 +510,8 @@ export default function Home() {
         phone,
         service,
         price: Number(price) || 0,
+        parts_used: partsUsed.trim() || null,
+        amc_expiry_date: amcExpiryDate || null,
         status: 'Pending',
         next_service_date: nextServiceDate || null,
         user_id: effectiveOwnerId,
@@ -526,6 +532,8 @@ export default function Home() {
       setName('');
       setPhone('');
       setPrice('');
+      setPartsUsed('');
+      setAmcExpiryDate('');
       setNextServiceDate('');
       fetchBookings(effectiveOwnerId);
     }
@@ -542,6 +550,8 @@ export default function Home() {
     setEditPhone(item.phone || '');
     setEditService(item.service || 'AC Repair & Service');
     setEditPrice(String(item.price ?? ''));
+    setEditPartsUsed(item.parts_used || '');
+    setEditAmcExpiryDate(item.amc_expiry_date || '');
     setEditStatus(item.status || 'Pending');
     setEditNextServiceDate(item.next_service_date || '');
   };
@@ -552,6 +562,8 @@ export default function Home() {
     setEditPhone('');
     setEditService('AC Repair & Service');
     setEditPrice('');
+    setEditPartsUsed('');
+    setEditAmcExpiryDate('');
     setEditStatus('Pending');
     setEditNextServiceDate('');
   };
@@ -571,6 +583,8 @@ export default function Home() {
         phone: editPhone.trim(),
         service: editService,
         price: Number(editPrice) || 0,
+        parts_used: editPartsUsed.trim() || null,
+        amc_expiry_date: editAmcExpiryDate || null,
         status: editStatus,
         next_service_date: editNextServiceDate || null,
       })
@@ -630,8 +644,8 @@ export default function Home() {
     }
 
     const headers = canViewRevenue
-      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Price (INR)', 'Status', 'Next Service Date']
-      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Status', 'Next Service Date'];
+      ? ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Price (INR)', 'Status', 'Next Service Date']
+      : ['Booking ID', 'Customer Name', 'Phone', 'Service', 'Parts Used', 'AMC Expiry Date', 'Status', 'Next Service Date'];
 
     const rows = filteredBookings.map((item) => {
       const baseCols = [
@@ -639,6 +653,8 @@ export default function Home() {
         escapeCsvValue(item.name ?? ''),
         escapeCsvValue(item.phone ?? ''),
         escapeCsvValue(item.service ?? ''),
+        escapeCsvValue(item.parts_used || ''),
+        escapeCsvValue(item.amc_expiry_date || ''),
       ];
       if (canViewRevenue) {
         baseCols.push(escapeCsvValue(Number(item.price) || 0));
@@ -676,6 +692,14 @@ export default function Home() {
       `Service: ${item.service}`,
       `Bill Amount: ₹${amountVal} (${item.status || 'Pending'})`,
     ];
+
+    if (item.parts_used) {
+      lines.push(`Parts/Items Used: ${item.parts_used}`);
+    }
+
+    if (item.amc_expiry_date) {
+      lines.push(`AMC/Warranty Valid Till: ${item.amc_expiry_date}`);
+    }
 
     if (item.next_service_date) {
       lines.push(
@@ -756,8 +780,10 @@ export default function Home() {
                   <div style="margin-top: 4px;"><strong>Total Visits:</strong> ${visitCount}</div>
                 </div>
                 <div class="box-card">
-                  <div class="box-label">Service Schedule</div>
+                  <div class="box-label">Service &amp; AMC Details</div>
                   <div><strong>Service:</strong> ${item.service}</div>
+                  <div style="margin-top: 4px;"><strong>Parts Used:</strong> ${item.parts_used || 'None / Standard'}</div>
+                  <div style="margin-top: 4px;"><strong>AMC Expiry:</strong> ${item.amc_expiry_date || 'N/A'}</div>
                   <div style="margin-top: 4px;"><strong>Next Service:</strong> ${item.next_service_date || 'Not Scheduled'}</div>
                 </div>
               </div>
@@ -771,7 +797,7 @@ export default function Home() {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>${item.service}</td>
+                    <td>${item.service}${item.parts_used ? ` (${item.parts_used})` : ''}</td>
                     <td style="text-align: right;">₹${amountVal}</td>
                   </tr>
                   <tr class="total-row">
@@ -825,10 +851,12 @@ export default function Home() {
         : statusFilter === 'Overdue'
         ? Boolean(dueBadge?.isOverdue)
         : currentStatus === statusFilter);
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.name.toLowerCase().includes(q) ||
       item.phone.includes(searchQuery) ||
-      item.service.toLowerCase().includes(searchQuery.toLowerCase());
+      item.service.toLowerCase().includes(q) ||
+      String(item.parts_used || '').toLowerCase().includes(q);
     return matchesStatus && matchesSearch;
   });
 
@@ -1335,6 +1363,7 @@ export default function Home() {
                     <option value="Home Cleaning">Home Cleaning</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                     Service Price (₹)
@@ -1349,6 +1378,34 @@ export default function Home() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    Parts / Items Used (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={partsUsed}
+                    onChange={(e) => setPartsUsed(e.target.value)}
+                    placeholder="e.g. RO Membrane, Filter, Gas Refill"
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                    AMC / Warranty Expiry (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={amcExpiryDate}
+                    onChange={(e) => setAmcExpiryDate(e.target.value)}
+                    autoComplete="off"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                     Next Service Date
@@ -1361,6 +1418,7 @@ export default function Home() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500"
                   />
                 </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                     Shop Name (Auto-Syncs)
@@ -1392,7 +1450,7 @@ export default function Home() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="🔍 Search by customer name, phone or service..."
+                placeholder="🔍 Search by customer name, phone, service or parts..."
                 autoComplete="off"
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500"
               />
@@ -1543,6 +1601,19 @@ export default function Home() {
                             placeholder="Amount (₹)"
                             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
                           />
+                          <input
+                            type="text"
+                            value={editPartsUsed}
+                            onChange={(e) => setEditPartsUsed(e.target.value)}
+                            placeholder="Parts / Items Used"
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
+                          <input
+                            type="date"
+                            value={editAmcExpiryDate}
+                            onChange={(e) => setEditAmcExpiryDate(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white"
+                          />
                           <select
                             value={editStatus}
                             onChange={(e) => setEditStatus(e.target.value)}
@@ -1597,12 +1668,22 @@ export default function Home() {
                               {dueBadge.label}
                             </span>
                           )}
+                          {item.amc_expiry_date && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/15 text-purple-200 border border-purple-500/30">
+                              AMC: {item.amc_expiry_date}
+                            </span>
+                          )}
                         </div>
                         <p className="text-slate-400 text-xs mt-0.5">
                           📞 {item.phone}
                           {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
                           {item.next_service_date && ` | 📅 ${item.next_service_date}`}
                         </p>
+                        {item.parts_used && (
+                          <p className="text-cyan-300/90 text-xs mt-1">
+                            🛠️ Parts: {item.parts_used}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
