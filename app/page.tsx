@@ -9,7 +9,7 @@ declare const window: any;
 type PolicyTab = 'refund' | 'privacy' | 'terms';
 type UserRole = 'owner' | 'manager' | 'receptionist' | 'technician' | 'super_admin';
 type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
-type StatusFilter = 'all' | 'Pending' | 'Completed';
+type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueSoon';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -45,6 +45,46 @@ export default function Home() {
   const canManageRoles = userRole === 'owner' || userRole === 'super_admin';
   const canCreateBooking = userRole !== 'technician';
   const canBillingAndShare = userRole !== 'technician';
+
+  const getDueBadge = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return null;
+    const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    targetDate.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((targetDate.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return {
+        label: `Overdue (${Math.abs(diffDays)}d)`,
+        className: 'bg-red-500/15 text-red-300 border border-red-500/30',
+        isDueSoon: false,
+      };
+    }
+    if (diffDays === 0) {
+      return {
+        label: 'Due Today',
+        className: 'bg-rose-500/20 text-rose-200 border border-rose-500/40',
+        isDueSoon: true,
+      };
+    }
+    if (diffDays <= 7) {
+      return {
+        label: `Due in ${diffDays}d`,
+        className: 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30',
+        isDueSoon: true,
+      };
+    }
+    return {
+      label: `Next: ${dateStr}`,
+      className: 'bg-slate-800 text-slate-300 border border-slate-700',
+      isDueSoon: false,
+    };
+  };
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
@@ -455,6 +495,7 @@ export default function Home() {
               <p><strong>Service:</strong> ${item.service}</p>
               <p><strong>Amount:</strong> ₹${item.price || 0}</p>
               <p><strong>Status:</strong> ${item.status || 'Pending'}</p>
+              ${item.next_service_date ? `<p><strong>Next Service Date:</strong> ${item.next_service_date}</p>` : ''}
             </div>
             <script>window.onload = function() { window.print(); }</script>
           </body>
@@ -466,6 +507,7 @@ export default function Home() {
 
   const pendingCount = bookings.filter((item) => (item.status || 'Pending') === 'Pending').length;
   const completedCount = bookings.filter((item) => item.status === 'Completed').length;
+  const dueSoonCount = bookings.filter((item) => Boolean(getDueBadge(item.next_service_date)?.isDueSoon)).length;
 
   const totalRevenue = bookings
     .filter((item) => item.status === 'Completed')
@@ -473,7 +515,10 @@ export default function Home() {
 
   const filteredBookings = bookings.filter((item) => {
     const currentStatus = item.status || 'Pending';
-    const matchesStatus = statusFilter === 'all' || currentStatus === statusFilter;
+    const dueBadge = getDueBadge(item.next_service_date);
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'DueSoon' ? Boolean(dueBadge?.isDueSoon) : currentStatus === statusFilter);
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.phone.includes(searchQuery) ||
@@ -895,7 +940,7 @@ export default function Home() {
               </span>
               <span className="text-slate-700">|</span>
               <span>
-                Total: <strong className="text-cyan-400">{bookings.length}</strong>
+                Due Soon: <strong className="text-cyan-400">{dueSoonCount}</strong>
               </span>
             </div>
 
@@ -1064,70 +1109,95 @@ export default function Home() {
               >
                 Completed ({completedCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('DueSoon')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === 'DueSoon'
+                    ? 'bg-sky-400 text-slate-950'
+                    : 'bg-slate-950 text-sky-300 border border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Due Soon ({dueSoonCount})
+              </button>
             </div>
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {filteredBookings.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">Koi matching booking nahi mili.</p>
               ) : (
-                filteredBookings.map((item, index) => (
-                  <div
-                    key={item.id || index}
-                    className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
-                  >
-                    <div>
-                      <h3 className="font-bold text-white text-base">{item.name}</h3>
-                      <p className="text-slate-400 text-xs">
-                        📞 {item.phone}
-                        {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
-                        {item.next_service_date && ` | 📅 Next: ${item.next_service_date}`}
-                      </p>
+                filteredBookings.map((item, index) => {
+                  const dueBadge = getDueBadge(item.next_service_date);
+                  return (
+                    <div
+                      key={item.id || index}
+                      className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-bold text-white text-base">{item.name}</h3>
+                          {dueBadge && (
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${dueBadge.className}`}>
+                              {dueBadge.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                          📞 {item.phone}
+                          {canViewRevenue ? ` | 💵 ₹${item.price || 0}` : ''}
+                          {item.next_service_date && ` | 📅 ${item.next_service_date}`}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full text-xs font-semibold">
+                          {item.service}
+                        </span>
+
+                        <button
+                          onClick={() => toggleStatus(item.id, item.status)}
+                          className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+                            item.status === 'Completed'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}
+                        >
+                          {item.status || 'Pending'}
+                        </button>
+
+                        {canBillingAndShare && (
+                          <>
+                            <button
+                              onClick={() => handlePrintInvoice(item)}
+                              className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full text-xs font-bold"
+                            >
+                              📄 Bill
+                            </button>
+
+                            <a
+                              href={`https://wa.me/91${item.phone}?text=Hello%20${encodeURIComponent(
+                                item.name
+                              )},%20thank%20you%20for%20choosing%20${encodeURIComponent(
+                                providerName
+                              )}!%20Your%20bill%20for%20${encodeURIComponent(item.service)}%20is%20₹${
+                                item.price || 0
+                              }.${
+                                item.next_service_date
+                                  ? `%20Next%20service%20date:%20${encodeURIComponent(item.next_service_date)}.`
+                                  : ''
+                              }%20Please%20rate%20our%20service%20out%20of%205%20stars!⭐️`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
+                            >
+                              💬 WhatsApp &amp; Review
+                            </a>
+                          </>
+                        )}
+                      </div>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3 py-1 rounded-full text-xs font-semibold">
-                        {item.service}
-                      </span>
-
-                      <button
-                        onClick={() => toggleStatus(item.id, item.status)}
-                        className={`px-3 py-1 rounded-full text-xs font-bold transition ${
-                          item.status === 'Completed'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        }`}
-                      >
-                        {item.status || 'Pending'}
-                      </button>
-
-                      {canBillingAndShare && (
-                        <>
-                          <button
-                            onClick={() => handlePrintInvoice(item)}
-                            className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full text-xs font-bold"
-                          >
-                            📄 Bill
-                          </button>
-
-                          <a
-                            href={`https://wa.me/91${item.phone}?text=Hello%20${encodeURIComponent(
-                              item.name
-                            )},%20thank%20you%20for%20choosing%20${encodeURIComponent(
-                              providerName
-                            )}!%20Your%20bill%20for%20${encodeURIComponent(item.service)}%20is%20₹${
-                              item.price || 0
-                            }.%20Please%20rate%20our%20service%20out%20of%205%20stars!⭐️`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"
-                          >
-                            💬 WhatsApp &amp; Review
-                          </a>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
