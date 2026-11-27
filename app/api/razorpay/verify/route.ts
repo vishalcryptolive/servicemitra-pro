@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // अभी ₹1 टेस्ट; टेस्ट सफल होने के बाद monthly के लिए 1 को 499 कर दें
+    // ₹1 टेस्ट मोड; टेस्ट कन्फर्म होने के बाद monthly के लिए 1 को 499 कर दें
     const amountInr = planType === 'yearly' ? 1999 : 1;
     const periodDays = planType === 'yearly' ? 365 : 30;
 
@@ -133,19 +133,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      subscription_expires_at: formattedExpiry,
-      period_days: periodDays,
-      is_pro: true,
-    });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message || 'Unexpected verification error' },
-      { status: 500 }
-    );
-  }
-}
     return NextResponse.json({
       success: true,
       subscription_expires_at: formattedExpiry,
