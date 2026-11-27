@@ -470,13 +470,12 @@ export default function Home() {
       return;
     }
 
-    // ₹1 टेस्ट मोड: टेस्ट कन्फर्म होने के बाद monthly के लिए 1 की जगह 499 कर दें
-    const amount = planType === 'yearly' ? 1999 : 1;
+    const amount = planType === 'yearly' ? 1999 : 499;
     const daysToAdd = planType === 'yearly' ? 365 : 30;
     const description =
       planType === 'yearly'
         ? 'Yearly Subscription (365 Days)'
-        : 'Monthly Subscription (30 Days - ₹1 Test)';
+        : 'Monthly Subscription (30 Days)';
     const targetOwner = workspaceOwnerId || userId;
 
     let orderId: string | undefined;
@@ -1549,7 +1548,7 @@ export default function Home() {
               onClick={() => handleRenewPlan('monthly')}
               className="bg-white text-red-700 px-3 py-1.5 rounded-lg text-xs font-black shadow hover:bg-slate-100 transition"
             >
-              Monthly (₹1 Test)
+              Monthly (₹499)
             </button>
             <button
               onClick={() => handleRenewPlan('yearly')}
@@ -1631,9 +1630,9 @@ export default function Home() {
                 <button
                   onClick={() => handleRenewPlan('monthly')}
                   className="bg-teal-50 text-teal-800 border border-teal-200 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-teal-100 transition"
-                  title="Monthly ₹1 Test"
+                  title="Monthly ₹499"
                 >
-                  ₹1
+                  ₹499
                 </button>
                 <button
                   onClick={() => handleRenewPlan('yearly')}
