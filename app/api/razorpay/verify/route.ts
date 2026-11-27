@@ -24,19 +24,24 @@ function calculateExpiryDate(currentExpiry: string | null | undefined, daysToAdd
 
 export async function POST(req: NextRequest) {
   try {
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized: missing session token' }, { status: 401 });
+    }
+
     const body = await req.json();
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       planType,
-      userId,
-      userEmail,
     } = body;
 
-    if (!razorpay_payment_id || !razorpay_signature || !planType || (!userId && !userEmail)) {
+    if (!razorpay_payment_id || !razorpay_signature || !planType) {
       return NextResponse.json(
-        { error: 'Missing required payment or user details' },
+        { error: 'Missing required payment details' },
         { status: 400 }
       );
     }
@@ -45,15 +50,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan type' }, { status: 400 });
     }
 
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!keySecret || !supabaseUrl || !serviceRoleKey) {
+    if (!keyId || !keySecret || !supabaseUrl || !serviceRoleKey) {
       return NextResponse.json(
         { error: 'Server payment or database configuration is missing' },
         { status: 500 }
       );
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !authUser) {
+      return NextResponse.json({ error: 'Unauthorized: invalid user session' }, { status: 401 });
     }
 
     const payloadToSign = razorpay_order_id
@@ -69,27 +86,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payment signature' }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
     const amountInr = planType === 'yearly' ? 1999 : 499;
+    const expectedPaise = amountInr * 100;
     const periodDays = planType === 'yearly' ? 365 : 30;
 
-    const orFilter = [
-      userId ? `user_id.eq.${userId}` : '',
-      userEmail ? `email.eq.${userEmail}` : '',
-    ]
-      .filter(Boolean)
-      .join(',');
+    const basicAuth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const rzpRes = await fetch(
+      `https://api.razorpay.com/v1/payments/${encodeURIComponent(razorpay_payment_id)}`,
+      {
+        headers: {
+          Authorization: `Basic ${basicAuth}`,
+        },
+      }
+    );
 
-    const { data: profileRow } = await supabaseAdmin
+    if (!rzpRes.ok) {
+      return NextResponse.json(
+        { error: 'Unable to verify payment with Razorpay' },
+        { status: 502 }
+      );
+    }
+
+    const rzpPayment = await rzpRes.json();
+
+    if (rzpPayment.status !== 'captured' && rzpPayment.status !== 'authorized') {
+      return NextResponse.json(
+        { error: `Payment not completed (status: ${rzpPayment.status || 'unknown'})` },
+        { status: 400 }
+      );
+    }
+
+    if (Number(rzpPayment.amount) !== expectedPaise || rzpPayment.currency !== 'INR') {
+      return NextResponse.json(
+        { error: 'Payment amount or currency mismatch' },
+        { status: 400 }
+      );
+    }
+
+    const { data: callerProfile } = await supabaseAdmin
       .from('profiles')
       .select('*')
-      .or(orFilter)
+      .eq('user_id', authUser.id)
       .maybeSingle();
 
-    const resolvedUserId = profileRow?.user_id || userId || null;
-    const resolvedEmail = profileRow?.email || userEmail || null;
-    const formattedExpiry = calculateExpiryDate(profileRow?.subscription_expires_at, periodDays);
+    const targetOwnerId = callerProfile?.owner_id || authUser.id;
+
+    let { data: targetProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('user_id', targetOwnerId)
+      .maybeSingle();
+
+    if (!targetProfile && callerProfile) {
+      targetProfile = callerProfile;
+    }
+
+    const resolvedUserId = targetProfile?.user_id || authUser.id;
+    const resolvedEmail = targetProfile?.email || authUser.email || null;
+    const formattedExpiry = calculateExpiryDate(targetProfile?.subscription_expires_at, periodDays);
 
     const { error: paymentError } = await supabaseAdmin.from('payments').upsert(
       [
@@ -99,7 +153,7 @@ export async function POST(req: NextRequest) {
           plan_type: planType,
           amount_inr: amountInr,
           currency: 'INR',
-          razorpay_order_id: razorpay_order_id || null,
+          razorpay_order_id: razorpay_order_id || rzpPayment.order_id || null,
           razorpay_payment_id,
           status: 'paid',
           period_days: periodDays,
@@ -115,14 +169,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (profileRow?.id) {
+    if (targetProfile?.id) {
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .update({
           is_pro: true,
           subscription_expires_at: formattedExpiry,
         })
-        .eq('id', profileRow.id);
+        .eq('id', targetProfile.id);
 
       if (profileError) {
         return NextResponse.json(
