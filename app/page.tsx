@@ -12,6 +12,8 @@ type StaffAssignableRole = 'manager' | 'receptionist' | 'technician';
 type StatusFilter = 'all' | 'Pending' | 'Completed' | 'DueToday' | 'DueSoon' | 'Overdue' | 'AmcExpiring';
 type PaymentMethod = 'Cash' | 'UPI' | 'Due';
 
+const FREE_TRIAL_LIMIT = 2;
+
 export default function Home() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -43,6 +45,8 @@ export default function Home() {
   const [technicianFilter, setTechnicianFilter] = useState<string>('all');
   const [selectedHistoryPhone, setSelectedHistoryPhone] = useState<string | null>(null);
   const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
+  const [isProPlan, setIsProPlan] = useState(false);
+  const [freeEntriesUsed, setFreeEntriesUsed] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookings, setBookings] = useState<any[]>([]);
@@ -86,6 +90,34 @@ export default function Home() {
   const normalizePaymentMethod = (val?: string | null): PaymentMethod => {
     if (val === 'Cash' || val === 'UPI' || val === 'Due') return val;
     return 'Due';
+  };
+
+  const evaluateSubscriptionState = (
+    profileObj: any,
+    currentBookingsCount: number
+  ) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const expiryDate = profileObj?.subscription_expires_at || '';
+    const hasFutureExpiry = Boolean(expiryDate && expiryDate >= todayStr);
+    const proFlag = Boolean(profileObj?.is_pro) && (!expiryDate || hasFutureExpiry);
+    const usedCount = Math.max(
+      Number(profileObj?.free_entries_used) || 0,
+      currentBookingsCount
+    );
+
+    setIsProPlan(proFlag);
+    setFreeEntriesUsed(usedCount);
+    if (expiryDate) {
+      setSubscriptionExpiry(expiryDate);
+    }
+
+    if (proFlag) {
+      setIsExpired(false);
+    } else if (usedCount >= FREE_TRIAL_LIMIT) {
+      setIsExpired(true);
+    } else {
+      setIsExpired(false);
+    }
   };
 
   const getDiffDaysFromToday = (dateStr?: string | null): number | null => {
@@ -183,11 +215,42 @@ export default function Home() {
         let resolvedRole: UserRole = 'owner';
         let targetOwnerId = user.id;
 
-        const { data: profileData } = await supabase
+        let { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .or(`user_id.eq.${user.id},email.eq.${user.email}`)
           .maybeSingle();
+
+        if (!profileData) {
+          const { data: insertedProfile } = await supabase
+            .from('profiles')
+            .upsert(
+              [
+                {
+                  user_id: user.id,
+                  email: user.email,
+                  provider_name: 'My Service Shop',
+                  role: 'owner',
+                  is_pro: false,
+                  free_entries_used: 0,
+                },
+              ],
+              { onConflict: 'user_id' }
+            )
+            .select('*')
+            .maybeSingle();
+
+          profileData = insertedProfile || {
+            user_id: user.id,
+            email: user.email,
+            provider_name: 'My Service Shop',
+            role: 'owner',
+            is_pro: false,
+            free_entries_used: 0,
+          };
+        }
+
+        let effectiveProfileForPlan = profileData;
 
         if (profileData) {
           if (profileData.owner_id) {
@@ -210,6 +273,10 @@ export default function Home() {
               .eq('user_id', profileData.owner_id)
               .maybeSingle();
 
+            if (ownerProfile) {
+              effectiveProfileForPlan = ownerProfile;
+            }
+
             if (ownerProfile?.provider_name) {
               setProviderName(ownerProfile.provider_name);
             } else if (profileData.provider_name) {
@@ -220,20 +287,6 @@ export default function Home() {
 
             setShopPhone(ownerProfile?.shop_phone || profileData.shop_phone || '');
             setShopAddress(ownerProfile?.shop_address || profileData.shop_address || '');
-
-            const entriesUsed = ownerProfile?.free_entries_used || 0;
-            const isUserPro = ownerProfile?.is_pro || false;
-            if (!isUserPro && entriesUsed >= 2) {
-              setIsExpired(true);
-            }
-            if (ownerProfile?.subscription_expires_at) {
-              const expiryDate = ownerProfile.subscription_expires_at;
-              setSubscriptionExpiry(expiryDate);
-              const today = new Date().toISOString().split('T')[0];
-              if (today > expiryDate && !isUserPro) {
-                setIsExpired(true);
-              }
-            }
           } else {
             if (profileData.provider_name) {
               setProviderName(profileData.provider_name);
@@ -242,36 +295,15 @@ export default function Home() {
             }
             setShopPhone(profileData.shop_phone || '');
             setShopAddress(profileData.shop_address || '');
-
-            const entriesUsed = profileData.free_entries_used || 0;
-            const isUserPro = profileData.is_pro || false;
-
-            if (!isUserPro && entriesUsed >= 2) {
-              setIsExpired(true);
-            }
-
-            if (profileData.subscription_expires_at) {
-              const expiryDate = profileData.subscription_expires_at;
-              setSubscriptionExpiry(expiryDate);
-              const today = new Date().toISOString().split('T')[0];
-              if (today > expiryDate && !isUserPro) {
-                setIsExpired(true);
-              }
-            }
           }
-        } else {
-          setWorkspaceOwnerId(user.id);
-          setProviderName('My Service Shop');
-          setShopPhone('');
-          setShopAddress('');
-          setUserRole('owner');
         }
+
+        const loadedBookings = await fetchBookings(targetOwnerId);
+        evaluateSubscriptionState(effectiveProfileForPlan, loadedBookings.length);
 
         if (resolvedRole === 'owner' || resolvedRole === 'super_admin') {
           fetchStaffProfiles(targetOwnerId, user.id, user.email);
         }
-
-        fetchBookings(targetOwnerId);
       } else {
         setIsAuthenticated(false);
       }
@@ -392,7 +424,7 @@ export default function Home() {
     setRoleSavingId(null);
   };
 
-  const fetchBookings = async (targetUserId?: string) => {
+  const fetchBookings = async (targetUserId?: string): Promise<any[]> => {
     let query = supabase.from('bookings').select('*').order('created_at', { ascending: false });
 
     if (targetUserId) {
@@ -400,9 +432,9 @@ export default function Home() {
     }
 
     const { data } = await query;
-    if (data) {
-      setBookings(data);
-    }
+    const rows = data || [];
+    setBookings(rows);
+    return rows;
   };
 
   const handleLogout = async () => {
@@ -412,11 +444,14 @@ export default function Home() {
     setUserEmail('');
     setWorkspaceOwnerId('');
     setUserRole('owner');
+    setIsProPlan(false);
+    setFreeEntriesUsed(0);
+    setIsExpired(false);
     setStaffProfiles([]);
     router.push('/login');
   };
 
-  const handleRenewPlan = (planType: 'monthly' | 'yearly') => {
+  const handleRenewPlan = async (planType: 'monthly' | 'yearly') => {
     if (!window.Razorpay) {
       alert('Razorpay SDK failed to load. Please check your internet connection.');
       return;
@@ -435,16 +470,42 @@ export default function Home() {
       planType === 'yearly'
         ? 'Yearly Subscription (365 Days)'
         : 'Monthly Subscription (30 Days - ₹1 Test)';
+    const targetOwner = workspaceOwnerId || userId;
 
-    const options = {
+    let orderId: string | undefined;
+    try {
+      const orderRes = await fetch('/api/razorpay/order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: amount * 100,
+          currency: 'INR',
+          planType,
+          userId: targetOwner,
+          userEmail,
+        }),
+      });
+
+      if (orderRes.ok) {
+        const orderData = await orderRes.json();
+        orderId = orderData.orderId || orderData.id || orderData.order_id;
+      }
+    } catch {
+      // यदि /api/razorpay/order मौजूद नहीं है तो आगे बढ़ें
+    }
+
+    const options: any = {
       key: razorpayKey,
       amount: amount * 100,
       currency: 'INR',
       name: providerName || 'ServiceMitra Pro',
       description: description,
+      ...(orderId ? { order_id: orderId } : {}),
       notes: {
         planType,
-        userId: workspaceOwnerId || userId,
+        userId: targetOwner,
         userEmail,
       },
       handler: async function (response: any) {
@@ -456,11 +517,11 @@ export default function Home() {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id || null,
+                razorpay_order_id: response.razorpay_order_id || orderId || null,
                 razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
+                razorpay_signature: response.razorpay_signature || null,
                 planType,
-                userId: workspaceOwnerId || userId,
+                userId: targetOwner,
                 userEmail,
               }),
             });
@@ -475,6 +536,7 @@ export default function Home() {
             if (verifyData.subscription_expires_at) {
               setSubscriptionExpiry(verifyData.subscription_expires_at);
             }
+            setIsProPlan(true);
             setIsExpired(false);
             alert(
               `Payment Verified! Plan successfully renewed for ${
@@ -531,25 +593,55 @@ export default function Home() {
 
     const effectiveOwnerId = workspaceOwnerId || user.id;
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
-      .select('is_pro, free_entries_used')
+      .select('is_pro, free_entries_used, subscription_expires_at')
       .eq('user_id', effectiveOwnerId)
       .maybeSingle();
 
-    if (profile && !profile.is_pro) {
-      const entriesUsed = profile.free_entries_used || 0;
-      if (entriesUsed >= 2) {
-        alert('Your 2 free trial entries have ended. Please upgrade to Pro to continue!');
-        setIsExpired(true);
-        setLoading(false);
-        return;
-      } else {
-        await supabase
-          .from('profiles')
-          .update({ free_entries_used: entriesUsed + 1 })
-          .eq('user_id', effectiveOwnerId);
-      }
+    if (!profile) {
+      const { data: createdProfile } = await supabase
+        .from('profiles')
+        .upsert(
+          [
+            {
+              user_id: effectiveOwnerId,
+              email: user.email,
+              provider_name: 'My Service Shop',
+              role: 'owner',
+              is_pro: false,
+              free_entries_used: 0,
+            },
+          ],
+          { onConflict: 'user_id' }
+        )
+        .select('is_pro, free_entries_used, subscription_expires_at')
+        .maybeSingle();
+
+      profile = createdProfile || {
+        is_pro: false,
+        free_entries_used: 0,
+        subscription_expires_at: null,
+      };
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const hasActivePro =
+      Boolean(profile?.is_pro) &&
+      (!profile?.subscription_expires_at || profile.subscription_expires_at >= todayStr);
+
+    const currentBookingCount = bookings.length;
+    const entriesUsed = Math.max(Number(profile?.free_entries_used) || 0, currentBookingCount);
+
+    if (!hasActivePro && entriesUsed >= FREE_TRIAL_LIMIT) {
+      alert(
+        `Your ${FREE_TRIAL_LIMIT} free trial entries have ended. Please activate a subscription plan to continue!`
+      );
+      setIsProPlan(false);
+      setFreeEntriesUsed(entriesUsed);
+      setIsExpired(true);
+      setLoading(false);
+      return;
     }
 
     const pCost = Number(partsCost) || 0;
@@ -581,6 +673,14 @@ export default function Home() {
     if (bookingError) {
       alert('Samasya aayi hai: ' + bookingError.message);
     } else {
+      const nextUsedCount = entriesUsed + 1;
+      if (!hasActivePro) {
+        await supabase
+          .from('profiles')
+          .update({ free_entries_used: nextUsedCount })
+          .eq('user_id', effectiveOwnerId);
+      }
+
       alert('Booking safaltapoorvak save ho gayi hai!');
       setName('');
       setPhone('');
@@ -596,7 +696,14 @@ export default function Home() {
       setAmcExpiryDate('');
       setNextServiceDate('');
       setShowExtraBookingFields(false);
-      fetchBookings(effectiveOwnerId);
+      const updatedRows = await fetchBookings(effectiveOwnerId);
+      evaluateSubscriptionState(
+        {
+          ...profile,
+          free_entries_used: Math.max(nextUsedCount, updatedRows.length),
+        },
+        updatedRows.length
+      );
     }
     setLoading(false);
   };
@@ -1086,6 +1193,9 @@ export default function Home() {
     ? bookings.filter((b) => String(b.phone || '').trim() === selectedHistoryPhone)
     : [];
 
+  const trialEntriesCount = Math.max(freeEntriesUsed, bookings.length);
+  const trialLocked = !isProPlan && (isExpired || trialEntriesCount >= FREE_TRIAL_LIMIT);
+
   if (authChecking) {
     return (
       <main className="min-h-screen bg-slate-50 text-slate-800 flex items-center justify-center p-6">
@@ -1422,9 +1532,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 p-5 md:p-8">
-      {isExpired && (
+      {trialLocked && (
         <div className="max-w-6xl mx-auto bg-red-600 text-white text-center py-3 px-4 rounded-xl mb-6 font-bold text-sm shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
-          <span>⚠️ Your Free Trial / Subscription Plan has Ended. Please renew to unlock full features!</span>
+          <span>
+            ⚠️ Free Trial ({FREE_TRIAL_LIMIT} entries) / Plan ended ({trialEntriesCount} entries used). Activate a plan to continue!
+          </span>
           <div className="flex gap-2">
             <button
               onClick={() => handleRenewPlan('monthly')}
@@ -1485,10 +1597,24 @@ export default function Home() {
 
             <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm flex items-center gap-2.5">
               <div>
-                <p className={isExpired ? 'text-red-700 font-bold' : 'text-emerald-700 font-bold'}>
-                  {isExpired ? '❌ Plan Ended' : '💎 Pro Active'}
+                <p
+                  className={
+                    isProPlan
+                      ? 'text-emerald-700 font-bold'
+                      : trialLocked
+                      ? 'text-red-700 font-bold'
+                      : 'text-amber-700 font-bold'
+                  }
+                >
+                  {isProPlan
+                    ? '💎 Pro Active'
+                    : trialLocked
+                    ? '❌ Trial Ended'
+                    : `🆓 Trial (${trialEntriesCount}/${FREE_TRIAL_LIMIT})`}
                 </p>
-                <p className="text-slate-500 text-[10px]">Exp: {subscriptionExpiry}</p>
+                <p className="text-slate-500 text-[10px]">
+                  {isProPlan ? `Exp: ${subscriptionExpiry}` : `Free limit: ${FREE_TRIAL_LIMIT} entries`}
+                </p>
               </div>
               <div className="flex gap-1">
                 <button
@@ -1766,10 +1892,14 @@ export default function Home() {
 
                 <button
                   type="submit"
-                  disabled={loading || isExpired}
+                  disabled={loading || trialLocked}
                   className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition shadow-sm disabled:opacity-50"
                 >
-                  {loading ? 'Saving...' : 'Confirm & Save Booking'}
+                  {loading
+                    ? 'Saving...'
+                    : trialLocked
+                    ? 'Trial Ended — Activate Plan'
+                    : 'Confirm & Save Booking'}
                 </button>
               </form>
             )}
