@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
+function addDaysToDateOnly(baseDateStr: string | null | undefined, daysToAdd: number): string {
+  const now = new Date();
+  const todayUtcMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+  let startMs = todayUtcMs;
+
+  if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) {
+    const [y, m, d] = baseDateStr.split('-').map(Number);
+    const existingMs = Date.UTC(y, m - 1, d);
+    // यदि मौजूदा एक्सपायरी आज से आगे की है, तो उसी के आगे दिन जोड़ें
+    if (existingMs > todayUtcMs) {
+      startMs = existingMs;
+    }
+  }
+
+  const resultMs = startMs + daysToAdd * 24 * 60 * 60 * 1000;
+  return new Date(resultMs).toISOString().split('T')[0];
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -70,17 +89,17 @@ export async function POST(req: NextRequest) {
     let resolvedUserId = userId || null;
     let resolvedEmail = userEmail || null;
 
+    const orFilter = [
+      userId ? `user_id.eq.${userId}` : '',
+      userEmail ? `email.eq.${userEmail}` : '',
+    ]
+      .filter(Boolean)
+      .join(',');
+
     const { data: profileRow } = await supabaseAdmin
       .from('profiles')
       .select('*')
-      .or(
-        [
-          userId ? `user_id.eq.${userId}` : '',
-          userEmail ? `email.eq.${userEmail}` : '',
-        ]
-          .filter(Boolean)
-          .join(',')
-      )
+      .or(orFilter)
       .maybeSingle();
 
     if (profileRow) {
@@ -88,15 +107,7 @@ export async function POST(req: NextRequest) {
       resolvedEmail = profileRow.email || resolvedEmail;
     }
 
-    const today = new Date();
-    const baseDate =
-      profileRow?.subscription_expires_at &&
-      new Date(profileRow.subscription_expires_at) > today
-        ? new Date(profileRow.subscription_expires_at)
-        : today;
-
-    baseDate.setDate(baseDate.getDate() + periodDays);
-    const formattedExpiry = baseDate.toISOString().split('T')[0];
+    const formattedExpiry = addDaysToDateOnly(profileRow?.subscription_expires_at, periodDays);
 
     const { error: paymentError } = await supabaseAdmin.from('payments').upsert(
       [
@@ -142,6 +153,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       subscription_expires_at: formattedExpiry,
+      period_days: periodDays,
       is_pro: true,
     });
   } catch (err: any) {
