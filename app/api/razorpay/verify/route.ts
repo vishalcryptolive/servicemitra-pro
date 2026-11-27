@@ -12,20 +12,14 @@ function calculateExpiryDate(currentExpiry: string | null | undefined, daysToAdd
     const cleanDate = String(currentExpiry).slice(0, 10);
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(cleanDate);
     if (match) {
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      const day = Number(match[3]);
-      const existingMs = Date.UTC(year, month - 1, day);
-
-      // यदि मौजूदा एक्सपायरी आज से आगे की है, तो उसी के आगे दिन जोड़ें; वरना आज से गिनें
+      const existingMs = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
       if (!Number.isNaN(existingMs) && existingMs > todayUtcMs) {
         startMs = existingMs;
       }
     }
   }
 
-  const targetMs = startMs + daysToAdd * 24 * 60 * 60 * 1000;
-  return new Date(targetMs).toISOString().split('T')[0];
+  return new Date(startMs + daysToAdd * 86400000).toISOString().split('T')[0];
 }
 
 export async function POST(req: NextRequest) {
@@ -77,11 +71,9 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const amountInr = planType === 'yearly' ? 1999 : 499;
+    // अभी ₹1 टेस्ट; टेस्ट सफल होने के बाद monthly के लिए 1 को 499 कर दें
+    const amountInr = planType === 'yearly' ? 1999 : 1;
     const periodDays = planType === 'yearly' ? 365 : 30;
-
-    let resolvedUserId = userId || null;
-    let resolvedEmail = userEmail || null;
 
     const orFilter = [
       userId ? `user_id.eq.${userId}` : '',
@@ -96,11 +88,8 @@ export async function POST(req: NextRequest) {
       .or(orFilter)
       .maybeSingle();
 
-    if (profileRow) {
-      resolvedUserId = profileRow.user_id || resolvedUserId;
-      resolvedEmail = profileRow.email || resolvedEmail;
-    }
-
+    const resolvedUserId = profileRow?.user_id || userId || null;
+    const resolvedEmail = profileRow?.email || userEmail || null;
     const formattedExpiry = calculateExpiryDate(profileRow?.subscription_expires_at, periodDays);
 
     const { error: paymentError } = await supabaseAdmin.from('payments').upsert(
@@ -144,6 +133,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    return NextResponse.json({
+      success: true,
+      subscription_expires_at: formattedExpiry,
+      period_days: periodDays,
+      is_pro: true,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || 'Unexpected verification error' },
+      { status: 500 }
+    );
+  }
+}
     return NextResponse.json({
       success: true,
       subscription_expires_at: formattedExpiry,
