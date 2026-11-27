@@ -14,6 +14,13 @@ type PaymentMethod = 'Cash' | 'UPI' | 'Due';
 
 const FREE_TRIAL_LIMIT = 2;
 
+function getLocalDateString(dateObj: Date = new Date()): string {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function Home() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -44,7 +51,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [technicianFilter, setTechnicianFilter] = useState<string>('all');
   const [selectedHistoryPhone, setSelectedHistoryPhone] = useState<string | null>(null);
-  const [subscriptionExpiry, setSubscriptionExpiry] = useState('2026-12-10');
+  const [subscriptionExpiry, setSubscriptionExpiry] = useState('');
   const [isProPlan, setIsProPlan] = useState(false);
   const [freeEntriesUsed, setFreeEntriesUsed] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
@@ -96,8 +103,9 @@ export default function Home() {
     profileObj: any,
     currentBookingsCount: number
   ) => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const expiryDate = profileObj?.subscription_expires_at || '';
+    const todayStr = getLocalDateString();
+    const rawExpiry = profileObj?.subscription_expires_at || '';
+    const expiryDate = rawExpiry ? String(rawExpiry).slice(0, 10) : '';
     const hasFutureExpiry = Boolean(expiryDate && expiryDate >= todayStr);
     const proFlag = Boolean(profileObj?.is_pro) && (!expiryDate || hasFutureExpiry);
     const usedCount = Math.max(
@@ -107,9 +115,7 @@ export default function Home() {
 
     setIsProPlan(proFlag);
     setFreeEntriesUsed(usedCount);
-    if (expiryDate) {
-      setSubscriptionExpiry(expiryDate);
-    }
+    setSubscriptionExpiry(expiryDate || '');
 
     if (proFlag) {
       setIsExpired(false);
@@ -125,7 +131,7 @@ export default function Home() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const parts = dateStr.split('-');
+    const parts = String(dateStr).slice(0, 10).split('-');
     if (parts.length !== 3) return null;
     const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     targetDate.setHours(0, 0, 0, 0);
@@ -445,6 +451,7 @@ export default function Home() {
     setWorkspaceOwnerId('');
     setUserRole('owner');
     setIsProPlan(false);
+    setSubscriptionExpiry('');
     setFreeEntriesUsed(0);
     setIsExpired(false);
     setStaffProfiles([]);
@@ -463,7 +470,7 @@ export default function Home() {
       return;
     }
 
-    // अस्थायी रूप से Monthly प्लान ₹1 (1) सेट किया गया है; टेस्ट के बाद वापस 499 कर दें
+    // ₹1 टेस्ट मोड: टेस्ट कन्फर्म होने के बाद monthly के लिए 1 की जगह 499 कर दें
     const amount = planType === 'yearly' ? 1999 : 1;
     const daysToAdd = planType === 'yearly' ? 365 : 30;
     const description =
@@ -533,15 +540,14 @@ export default function Home() {
               return;
             }
 
-            if (verifyData.subscription_expires_at) {
-              setSubscriptionExpiry(verifyData.subscription_expires_at);
-            }
+            const nextExpiry = verifyData.subscription_expires_at || '';
+            setSubscriptionExpiry(nextExpiry);
             setIsProPlan(true);
             setIsExpired(false);
             alert(
               `Payment Verified! Plan successfully renewed for ${
                 daysToAdd === 365 ? '1 Year' : '30 Days'
-              }.`
+              }${nextExpiry ? ` (Valid till ${nextExpiry})` : ''}.`
             );
           } catch (err: any) {
             alert('Verification request error: ' + (err?.message || 'Please contact support.'));
@@ -625,10 +631,11 @@ export default function Home() {
       };
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const hasActivePro =
-      Boolean(profile?.is_pro) &&
-      (!profile?.subscription_expires_at || profile.subscription_expires_at >= todayStr);
+    const todayStr = getLocalDateString();
+    const expiryClean = profile?.subscription_expires_at
+      ? String(profile.subscription_expires_at).slice(0, 10)
+      : '';
+    const hasActivePro = Boolean(profile?.is_pro) && (!expiryClean || expiryClean >= todayStr);
 
     const currentBookingCount = bookings.length;
     const entriesUsed = Math.max(Number(profile?.free_entries_used) || 0, currentBookingCount);
@@ -927,7 +934,7 @@ export default function Home() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const safeShop = (providerName || 'bookings').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     link.href = url;
@@ -1613,7 +1620,11 @@ export default function Home() {
                     : `🆓 Trial (${trialEntriesCount}/${FREE_TRIAL_LIMIT})`}
                 </p>
                 <p className="text-slate-500 text-[10px]">
-                  {isProPlan ? `Exp: ${subscriptionExpiry}` : `Free limit: ${FREE_TRIAL_LIMIT} entries`}
+                  {isProPlan
+                    ? subscriptionExpiry
+                      ? `Exp: ${subscriptionExpiry}`
+                      : 'Pro Active'
+                    : `Free limit: ${FREE_TRIAL_LIMIT} entries`}
                 </p>
               </div>
               <div className="flex gap-1">
