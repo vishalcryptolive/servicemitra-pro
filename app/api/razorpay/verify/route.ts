@@ -2,23 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-function addDaysToDateOnly(baseDateStr: string | null | undefined, daysToAdd: number): string {
+function calculateExpiryDate(currentExpiry: string | null | undefined, daysToAdd: number): string {
   const now = new Date();
   const todayUtcMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 
   let startMs = todayUtcMs;
 
-  if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) {
-    const [y, m, d] = baseDateStr.split('-').map(Number);
-    const existingMs = Date.UTC(y, m - 1, d);
-    // यदि मौजूदा एक्सपायरी आज से आगे की है, तो उसी के आगे दिन जोड़ें
-    if (existingMs > todayUtcMs) {
-      startMs = existingMs;
+  if (currentExpiry) {
+    const cleanDate = String(currentExpiry).slice(0, 10);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(cleanDate);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const existingMs = Date.UTC(year, month - 1, day);
+
+      // यदि मौजूदा एक्सपायरी आज से आगे की है, तो उसी के आगे दिन जोड़ें; वरना आज से गिनें
+      if (!Number.isNaN(existingMs) && existingMs > todayUtcMs) {
+        startMs = existingMs;
+      }
     }
   }
 
-  const resultMs = startMs + daysToAdd * 24 * 60 * 60 * 1000;
-  return new Date(resultMs).toISOString().split('T')[0];
+  const targetMs = startMs + daysToAdd * 24 * 60 * 60 * 1000;
+  return new Date(targetMs).toISOString().split('T')[0];
 }
 
 export async function POST(req: NextRequest) {
@@ -70,19 +77,6 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: existingPayment } = await supabaseAdmin
-      .from('payments')
-      .select('id, status')
-      .eq('razorpay_payment_id', razorpay_payment_id)
-      .maybeSingle();
-
-    if (existingPayment && existingPayment.status === 'paid') {
-      return NextResponse.json({
-        success: true,
-        message: 'Payment already recorded and verified',
-      });
-    }
-
     const amountInr = planType === 'yearly' ? 1999 : 499;
     const periodDays = planType === 'yearly' ? 365 : 30;
 
@@ -107,7 +101,7 @@ export async function POST(req: NextRequest) {
       resolvedEmail = profileRow.email || resolvedEmail;
     }
 
-    const formattedExpiry = addDaysToDateOnly(profileRow?.subscription_expires_at, periodDays);
+    const formattedExpiry = calculateExpiryDate(profileRow?.subscription_expires_at, periodDays);
 
     const { error: paymentError } = await supabaseAdmin.from('payments').upsert(
       [
