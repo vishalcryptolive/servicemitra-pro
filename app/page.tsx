@@ -391,6 +391,10 @@ export default function Home() {
       alert('Only Owner can change roles.');
       return;
     }
+    if (!['manager', 'receptionist', 'technician'].includes(nextRole)) {
+      alert('Invalid role.');
+      return;
+    }
 
     const rowKey = profileItem.id ?? profileItem.user_id ?? profileItem.email;
     setRoleSavingId(rowKey);
@@ -470,6 +474,16 @@ export default function Home() {
       return;
     }
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      alert('Session expired. Please log in again.');
+      return;
+    }
+
     const amount = planType === 'yearly' ? 1999 : 499;
     const daysToAdd = planType === 'yearly' ? 365 : 30;
     const description =
@@ -484,13 +498,12 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           amount: amount * 100,
           currency: 'INR',
           planType,
-          userId: targetOwner,
-          userEmail,
         }),
       });
 
@@ -521,14 +534,13 @@ export default function Home() {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
               },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id || orderId || null,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature || null,
                 planType,
-                userId: targetOwner,
-                userEmail,
               }),
             });
 
@@ -762,6 +774,12 @@ export default function Home() {
       alert('Technician role cannot edit bookings.');
       return;
     }
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    if (!effectiveOwnerId) {
+      alert('Workspace not found.');
+      return;
+    }
+
     setSavingEdit(true);
 
     const pCost = Number(editPartsCost) || 0;
@@ -769,8 +787,7 @@ export default function Home() {
     const enteredPrice = Number(editPrice) || 0;
     const finalPrice = enteredPrice > 0 ? enteredPrice : pCost + lCost;
 
-    const effectiveOwnerId = workspaceOwnerId || userId;
-    let updateQuery = supabase
+    const { error } = await supabase
       .from('bookings')
       .update({
         name: editName.trim(),
@@ -789,13 +806,8 @@ export default function Home() {
         status: editStatus,
         next_service_date: editNextServiceDate || null,
       })
-      .eq('id', id);
-
-    if (effectiveOwnerId) {
-      updateQuery = updateQuery.eq('user_id', effectiveOwnerId);
-    }
-
-    const { error } = await updateQuery;
+      .eq('id', id)
+      .eq('user_id', effectiveOwnerId);
 
     if (error) {
       alert('Update error: ' + error.message);
@@ -811,18 +823,21 @@ export default function Home() {
       alert('Technician role cannot delete bookings.');
       return;
     }
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    if (!effectiveOwnerId) {
+      alert('Workspace not found.');
+      return;
+    }
+
     const confirmed = window.confirm(`Delete booking for "${customerName}"? This cannot be undone.`);
     if (!confirmed) return;
 
     setDeletingBookingId(id);
-    const effectiveOwnerId = workspaceOwnerId || userId;
-    let deleteQuery = supabase.from('bookings').delete().eq('id', id);
-
-    if (effectiveOwnerId) {
-      deleteQuery = deleteQuery.eq('user_id', effectiveOwnerId);
-    }
-
-    const { error } = await deleteQuery;
+    const { error } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', effectiveOwnerId);
 
     if (error) {
       alert('Delete error: ' + error.message);
@@ -836,13 +851,18 @@ export default function Home() {
   };
 
   const toggleStatus = async (id: number, currentStatus: string) => {
-    const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
-    const effectiveOwnerId = workspaceOwnerId || userId;
-    let query = supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    if (effectiveOwnerId) {
-      query = query.eq('user_id', effectiveOwnerId);
+    if (!['owner', 'manager', 'receptionist', 'technician', 'super_admin'].includes(userRole)) {
+      return;
     }
-    await query;
+    const effectiveOwnerId = workspaceOwnerId || userId;
+    if (!effectiveOwnerId) return;
+
+    const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
+    await supabase
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', id)
+      .eq('user_id', effectiveOwnerId);
     fetchBookings(effectiveOwnerId);
   };
 
